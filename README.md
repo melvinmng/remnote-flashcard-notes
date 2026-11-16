@@ -43,6 +43,10 @@ list items, so lists copied from elsewhere keep their structure.
 | `Cmd` + `Shift` + `Z` / `Ctrl` + `Shift` + `Z` / `Ctrl` + `Y` | Redo |
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
+A small counter below the field shows how many list items you have written (for example
+`3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. It counts filled
+bullets and numbered items; plain lines and empty items are not counted.
+
 The clear button (×) in the top-right corner of the field empties the field. The field is also
 cleared automatically when the next card loads.
 

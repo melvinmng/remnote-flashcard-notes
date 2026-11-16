@@ -11,6 +11,7 @@ import {
   applyTextChange,
   type Block,
   computeNumbers,
+  countListItems,
   createBlock,
   emptyNotes,
   hasContent,
@@ -471,6 +472,7 @@ export const FlashcardNotesWidget = () => {
 
   const notesHaveContent = hasContent(blocks);
   const numbers = computeNumbers(blocks);
+  const listItemCount = countListItems(blocks);
   const showPlaceholder = blocks.length === 1 && blocks[0].kind === 'text';
 
   if (hideAfterReveal && isRevealed && !notesHaveContent) {
@@ -559,19 +561,26 @@ export const FlashcardNotesWidget = () => {
           </button>
         )}
       </div>
-      <div className="fn-hint">
-        <span>
-          <kbd>- Space</kbd> bullet list
-        </span>
-        <span>
-          <kbd>1. Space</kbd> numbered list
-        </span>
-        <span>
-          <kbd>⌥ Enter</kbd> line break
-        </span>
-        <span>
-          <kbd>Esc</kbd> back to queue
-        </span>
+      <div className="fn-footer">
+        <div className="fn-hint">
+          <span>
+            <kbd>- Space</kbd> bullet list
+          </span>
+          <span>
+            <kbd>1. Space</kbd> numbered list
+          </span>
+          <span>
+            <kbd>⌥ Enter</kbd> line break
+          </span>
+          <span>
+            <kbd>Esc</kbd> back to queue
+          </span>
+        </div>
+        {listItemCount > 0 && (
+          <span className="fn-count" aria-live="polite">
+            {listItemCount} {listItemCount === 1 ? 'bullet' : 'bullets'}
+          </span>
+        )}
       </div>
     </div>
   );

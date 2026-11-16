@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   type Block,
   computeNumbers,
+  countListItems,
   createBlock,
   parseText,
   pasteIntoBlocks,
@@ -13,7 +14,9 @@ import {
 } from '../src/notes_model';
 
 const shape = (blocks: Block[]) =>
-  blocks.map(({ kind, text, start }) => (start === undefined ? { kind, text } : { kind, text, start }));
+  blocks.map(({ kind, text, start }) =>
+    start === undefined ? { kind, text } : { kind, text, start }
+  );
 
 const cases: [string, () => void][] = [];
 const test = (name: string, run: () => void) => cases.push([name, run]);
@@ -29,7 +32,10 @@ test('pasting three bullet lines into an empty line creates three bullets', () =
   assert.deepEqual(shape(result.blocks), [
     { kind: 'bullet', text: 'Art. 2 GG - Recht auf informationelle Selbstbestimmung' },
     { kind: 'bullet', text: 'Art. 10 GG - Fernmeldegeheimnis' },
-    { kind: 'bullet', text: 'Art. 13 GG - Unverletzlichkeit der Wohnung (Digitale Untersuchungen?)' },
+    {
+      kind: 'bullet',
+      text: 'Art. 13 GG - Unverletzlichkeit der Wohnung (Digitale Untersuchungen?)',
+    },
   ]);
   assert.equal(result.blocks[0].id, blocks[0].id, 'first pasted line reuses the current line');
   assert.equal(result.focus.id, result.blocks[2].id);
@@ -116,6 +122,33 @@ test('lines around the pasted block are left untouched', () => {
     { kind: 'bullet', text: 'y' },
     { kind: 'text', text: 'below' },
   ]);
+});
+
+test('counter counts filled bullets and numbered items, not plain lines', () => {
+  const blocks = [
+    createBlock('text', 'intro'),
+    createBlock('bullet', 'a'),
+    createBlock('number', 'b', 1),
+    createBlock('bullet', 'c'),
+  ];
+  assert.equal(countListItems(blocks), 3);
+});
+
+test('counter ignores the empty bullet created by Enter', () => {
+  const blocks = [
+    createBlock('bullet', 'a'),
+    createBlock('bullet', ''),
+    createBlock('bullet', '  '),
+  ];
+  assert.equal(countListItems(blocks), 1);
+});
+
+test('counter counts a bullet with Option+Enter line breaks once', () => {
+  assert.equal(countListItems([createBlock('bullet', 'line one\nline two')]), 1);
+});
+
+test('counter is zero for plain text only', () => {
+  assert.equal(countListItems([createBlock('text', '- not a list yet')]), 0);
 });
 
 let failures = 0;

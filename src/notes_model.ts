@@ -66,6 +66,14 @@ export const computeNumbers = (blocks: Block[]): (number | null)[] => {
   return numbers;
 };
 
+/**
+ * Number of filled list items (bullets and numbered items). Empty items are
+ * ignored so a freshly started item after Enter does not count yet; an item
+ * with Option+Enter line breaks counts once.
+ */
+export const countListItems = (blocks: Block[]): number =>
+  blocks.filter((block) => block.kind !== 'text' && block.text.trim().length > 0).length;
+
 /** Turn the start of a plain line into a list item if it carries a list prefix. */
 export const applyListTrigger = (text: string): Omit<Block, 'id'> => {
   const bulletMatch = text.match(BULLET_TRIGGER);
