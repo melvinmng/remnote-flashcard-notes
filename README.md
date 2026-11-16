@@ -1,6 +1,6 @@
 # Flashcard Notes
 
-A RemNote plugin that adds a bullet-list notes field below the current flashcard in the queue.
+A RemNote plugin that adds a notes field with bullet and numbered lists below the current flashcard in the queue.
 
 Long cards (lists, definitions, multi-step explanations) are hard to check in your head. Write down
 everything you remember before revealing the answer, then compare your notes with the back of the
@@ -14,19 +14,31 @@ card and rate yourself as usual.
 
 Start a flashcard queue. The notes field appears below the question. Click into it and start typing.
 
+### Lists
+
+The field starts as plain text. Lists start with Markdown-style prefixes at the beginning of a line:
+
+| Type | Result |
+|---|---|
+| `-` followed by a space | Bullet list |
+| `1.` followed by a space | Numbered list (any number works, e.g. `3. ` starts at 3) |
+
+Wrapped lines and line breaks stay indented behind the bullet or number.
+
 ### Keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `Enter` | Start a new bullet (splits the bullet at the cursor) |
-| `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) | Line break inside the current bullet |
-| `Backspace` at the start of a bullet | Merge it into the previous bullet |
-| `↑` / `↓` at the start / end of a bullet | Move to the previous / next bullet |
+| `Enter` | New line; inside a list it starts the next item (splits at the cursor) |
+| `Enter` on an empty list item | End the list and continue with plain text |
+| `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) | Line break inside the current line or item |
+| `Backspace` at the start of a list item | Remove the bullet or number, keep the text |
+| `Backspace` at the start of a plain line | Merge it into the line above |
+| `↑` / `↓` at the start / end of a line | Move to the previous / next line |
+| `Cmd` + `A` / `Ctrl` + `A` | Select the whole field (all lines). Then `Backspace` clears it, typing replaces it, `Cmd`/`Ctrl` + `C`/`X` copies or cuts it as Markdown-style text |
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
-Wrapped lines and line breaks stay indented behind the bullet dot.
-
-The clear button (×) in the top-right corner of the field empties all bullets. The field is also
+The clear button (×) in the top-right corner of the field empties the field. The field is also
 cleared automatically when the next card loads.
 
 ### Settings
@@ -119,7 +131,7 @@ public/
 src/
   widgets/
     index.tsx            Plugin entry: registers settings and the queue widget
-    flashcard_notes.tsx  Notes field (bullet editor, keyboard handling, session restore)
+    flashcard_notes.tsx  Notes field (list editor, keyboard handling, session restore)
   index.css              Widget styles (light/dark theme)
   style.css              Tailwind base styles from the RemNote template
 webpack.config.js        Build configuration (one bundle per widget)
