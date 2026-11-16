@@ -16,7 +16,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   await plugin.settings.registerNumberSetting({
     id: SETTING_MIN_ROWS,
     title: 'Minimum height of the notes field (lines)',
-    defaultValue: 4,
+    defaultValue: 2,
   });
 
   await plugin.settings.registerBooleanSetting({

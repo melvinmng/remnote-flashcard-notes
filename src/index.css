@@ -1,59 +1,166 @@
-.flashcard-notes {
+/*
+ * Flashcard Notes widget styles.
+ * Colors are translucent overlays so the field blends into both RemNote themes.
+ * The SDK toggles "dark" / "light" on <body> inside the sandboxed iframe.
+ */
+
+html,
+body {
+  background: transparent !important;
+}
+
+.fn-root {
+  --fn-text: #1f2328;
+  --fn-muted: rgba(31, 35, 40, 0.45);
+  --fn-dot: rgba(31, 35, 40, 0.55);
+  --fn-surface: rgba(0, 0, 0, 0.025);
+  --fn-surface-hover: rgba(0, 0, 0, 0.04);
+  --fn-border: rgba(0, 0, 0, 0.08);
+  --fn-accent: rgb(80, 125, 250);
+  --fn-accent-ring: rgba(80, 125, 250, 0.22);
+  --fn-kbd-bg: rgba(0, 0, 0, 0.05);
+
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 0;
-  font-family: inherit;
+  gap: 6px;
+  padding: 4px 0 2px;
+  color: var(--fn-text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 24px;
 }
 
-.flashcard-notes__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  opacity: 0.7;
+body.dark .fn-root {
+  --fn-text: #e6e6eb;
+  --fn-muted: rgba(230, 230, 235, 0.4);
+  --fn-dot: rgba(230, 230, 235, 0.55);
+  --fn-surface: rgba(255, 255, 255, 0.03);
+  --fn-surface-hover: rgba(255, 255, 255, 0.05);
+  --fn-border: rgba(255, 255, 255, 0.08);
+  --fn-accent-ring: rgba(80, 125, 250, 0.3);
+  --fn-kbd-bg: rgba(255, 255, 255, 0.07);
 }
 
-.flashcard-notes__clear {
-  font-size: 12px;
-  padding: 0 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.flashcard-notes__input {
-  width: 100%;
+.fn-field {
+  position: relative;
   box-sizing: border-box;
+  padding: 10px 40px 10px 14px;
+  border: 1px solid var(--fn-border);
+  border-radius: 10px;
+  background: var(--fn-surface);
+  cursor: text;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.fn-field:hover {
+  background: var(--fn-surface-hover);
+}
+
+.fn-field:focus-within {
+  border-color: var(--fn-accent);
+  box-shadow: 0 0 0 3px var(--fn-accent-ring);
+  background: var(--fn-surface);
+}
+
+.fn-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fn-bullet {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Dot is vertically centered on the first text line: (24px - 6px) / 2 = 9px. */
+.fn-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--fn-dot);
+}
+
+.fn-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
   resize: none;
   overflow: hidden;
-  padding: 8px 10px;
-  font-size: 14px;
-  line-height: 1.5;
-  border-radius: 6px;
-  border: 1px solid rgba(127, 127, 127, 0.4);
   background: transparent;
   color: inherit;
-  outline: none;
+  font: inherit;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.flashcard-notes__input:focus {
-  border-color: rgba(59, 130, 246, 0.8);
+.fn-input::placeholder {
+  color: var(--fn-muted);
 }
 
-/* The SDK toggles "dark" / "light" on <body> inside the sandboxed iframe. */
-body.light .flashcard-notes {
-  color: #1f2937;
+.fn-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fn-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
-body.dark .flashcard-notes {
-  color: #e5e7eb;
+.fn-field:hover .fn-clear,
+.fn-field:focus-within .fn-clear {
+  opacity: 1;
 }
 
-body.dark .flashcard-notes__input {
-  border-color: rgba(229, 231, 235, 0.3);
+.fn-clear:hover {
+  background: var(--fn-kbd-bg);
+  color: var(--fn-text);
 }
 
-body.dark .flashcard-notes__input:focus {
-  border-color: rgba(96, 165, 250, 0.9);
+.fn-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--fn-muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.fn-root:focus-within .fn-hint {
+  opacity: 1;
+}
+
+.fn-hint kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--fn-kbd-bg);
+  font-family: inherit;
+  font-size: 11px;
 }
