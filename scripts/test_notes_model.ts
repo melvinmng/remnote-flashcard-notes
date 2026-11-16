@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  applyTextChange,
   type Block,
   computeNumbers,
   countListItems,
@@ -208,6 +209,47 @@ test('pasted lists are nested relative to the current item', () => {
     result.blocks.map((block) => block.indent ?? 0),
     [0, 1, 2]
   );
+});
+
+test('typing "1. " at the start of a bullet turns it into a numbered item', () => {
+  const bullet = item('bullet', 'Recall', 2);
+  const change = applyTextChange(bullet, '1. Recall', 3);
+  assert.equal(change.isListTrigger, true);
+  assert.deepEqual(shape([change.block]), [
+    { kind: 'number', text: 'Recall', start: 1, indent: 2 },
+  ]);
+  assert.equal(change.block.id, bullet.id);
+  assert.equal(change.caret, 0);
+});
+
+test('typing "- " at the start of a numbered item turns it into a bullet', () => {
+  const numbered = item('number', 'Recall', 1, 3);
+  const change = applyTextChange(numbered, '- Recall', 2);
+  assert.equal(change.isListTrigger, true);
+  assert.deepEqual(shape([change.block]), [{ kind: 'bullet', text: 'Recall', indent: 1 }]);
+});
+
+test('a switched item joins the surrounding numbered run', () => {
+  const blocks = [item('number', 'a'), item('bullet', 'b'), item('number', 'c')];
+  blocks[1] = applyTextChange(blocks[1], '1. b', 3).block;
+  assert.deepEqual(computeNumbers(blocks), [1, 2, 3]);
+});
+
+test('the prefix of the own list type stays literal text', () => {
+  assert.equal(applyTextChange(item('bullet', 'x'), '- x', 2).isListTrigger, false);
+  assert.equal(applyTextChange(item('number', 'x'), '2. x', 3).isListTrigger, false);
+});
+
+test('a prefix that was already in the text does not convert on the next keystroke', () => {
+  // E.g. after Backspace removed the marker of an item whose text starts with "1. ".
+  const plain: Block = { ...createBlock('text', '1. x') };
+  assert.equal(applyTextChange(plain, '1. xy', 5).isListTrigger, false);
+  const bullet = item('bullet', '1. x');
+  assert.equal(applyTextChange(bullet, '1. xy', 5).isListTrigger, false);
+});
+
+test('a prefix typed in the middle of a list item stays literal', () => {
+  assert.equal(applyTextChange(item('bullet', 'a'), 'a1. ', 4).isListTrigger, false);
 });
 
 test('counter counts top-level items only', () => {

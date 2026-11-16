@@ -234,20 +234,30 @@ export const parseText = (text: string): Block[] => {
 };
 
 /**
- * Apply a new value typed into a line. Plain lines starting with "- " or "1. "
- * become list items; the caret is shifted by the removed prefix.
+ * Apply a new value typed into a line. A list prefix typed at the start of a line
+ * switches its type: "- " or "1. " turns a plain line into a list item, "1. " turns a
+ * bullet into a numbered item and "- " a numbered item into a bullet (the nesting level
+ * is kept). The prefix of the line's own list type stays literal text, and so does a
+ * prefix that was already part of the text before this change. The caret is shifted
+ * by the removed prefix.
  */
 export const applyTextChange = (block: Block, value: string, caret: number) => {
-  if (block.kind === 'text') {
-    const parsed = applyListTrigger(value);
-    if (parsed.kind !== 'text') {
-      const prefixLength = value.length - parsed.text.length;
-      return {
-        block: { id: block.id, ...parsed } as Block,
-        caret: Math.max(0, caret - prefixLength),
-        isListTrigger: true,
-      };
+  const parsed = applyListTrigger(value);
+  const isNewPrefix =
+    parsed.kind !== 'text' &&
+    parsed.kind !== block.kind &&
+    applyListTrigger(block.text).kind !== parsed.kind;
+  if (isNewPrefix) {
+    const prefixLength = value.length - parsed.text.length;
+    const switched = { id: block.id, ...parsed } as Block;
+    if (block.kind !== 'text') {
+      switched.indent = indentOf(block);
     }
+    return {
+      block: switched,
+      caret: Math.max(0, caret - prefixLength),
+      isListTrigger: true,
+    };
   }
   return { block: { ...block, text: value }, caret, isListTrigger: false };
 };

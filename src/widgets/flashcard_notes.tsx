@@ -74,7 +74,8 @@ const fitToContent = (textArea: HTMLTextAreaElement | null) => {
  * Notes field rendered below the current flashcard.
  *
  * The field starts as plain text. Typing "- " or "1. " at the start of a line
- * turns that line into a bullet or numbered list item. Each line is its own
+ * turns that line into a bullet or numbered list item; the same prefixes switch a
+ * list item between bullet and number. Each line is its own
  * auto-growing text area inside a flex row, which keeps wrapped lines aligned
  * behind the list marker (hanging indent).
  *
@@ -299,7 +300,7 @@ export const FlashcardNotesWidget = () => {
 
     setAllSelected(false);
 
-    // Plain lines starting with "- " or "1. " become list items (a separate undo step);
+    // A "- " or "1. " typed at the start of a line switches its type (a separate undo step);
     // other typing is grouped per line so one undo step removes a burst of characters.
     const change = applyTextChange(block, value, caret);
     if (change.isListTrigger) {
