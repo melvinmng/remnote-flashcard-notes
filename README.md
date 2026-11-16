@@ -33,6 +33,10 @@ To switch the type of a line, type the other prefix at its start:
 | Numbered item | `-` followed by a space | Bullet |
 | Bullet or numbered item | `Backspace` (at the start of a top-level item) | Plain text |
 
+A prefix typed after a line break inside a plain line (`Shift` + `Enter` or `Option` + `Enter`)
+splits the line there and starts the list item on its own line, so plain text and lists can be
+mixed freely.
+
 The nesting level is kept. Typing the prefix of the item's own type (`- ` in a bullet) inserts it
 as text.
 
