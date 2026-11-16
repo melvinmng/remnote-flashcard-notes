@@ -25,6 +25,17 @@ The field starts as plain text. Lists start with Markdown-style prefixes at the 
 
 Wrapped lines and line breaks stay indented behind the bullet or number.
 
+To switch the type of a line, type the other prefix at its start:
+
+| Current line | Type at the start | Result |
+|---|---|---|
+| Bullet | `1.` followed by a space | Numbered item (joins the surrounding numbered list) |
+| Numbered item | `-` followed by a space | Bullet |
+| Bullet or numbered item | `Backspace` (at the start of a top-level item) | Plain text |
+
+The nesting level is kept. Typing the prefix of the item's own type (`- ` in a bullet) inserts it
+as text.
+
 Press `Tab` in a list item to nest it under the item above, and `Shift` + `Tab` to move it back.
 Nested items move together with their parent. Numbers are counted per level, and nested bullets
 use a hollow circle and a small square to tell the levels apart.
