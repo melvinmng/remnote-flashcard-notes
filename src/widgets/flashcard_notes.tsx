@@ -7,6 +7,19 @@ import {
   useTrackerPlugin,
   WidgetLocation,
 } from '@remnote/plugin-sdk';
+import {
+  applyTextChange,
+  type Block,
+  computeNumbers,
+  createBlock,
+  emptyNotes,
+  hasContent,
+  isValidBlock,
+  parseText,
+  pasteIntoBlocks,
+  type PendingFocus,
+  serializeBlocks,
+} from '../notes_model';
 import '../style.css';
 import '../index.css';
 
@@ -16,106 +29,23 @@ const DEFAULT_MIN_ROWS = 2;
 const LINE_HEIGHT_PX = 24;
 const SESSION_NOTES_KEY = 'flashcard-notes:current:v2';
 
-/** Markdown-style prefixes that turn a plain line into a list item. */
-const BULLET_TRIGGER = /^- /;
-const NUMBER_TRIGGER = /^(\d{1,4})\. /;
-
-type BlockKind = 'text' | 'bullet' | 'number';
-
-interface Block {
-  id: string;
-  kind: BlockKind;
-  text: string;
-  /** First number of a numbered run, taken from the typed prefix (e.g. "3. "). */
-  start?: number;
-}
-
 interface StoredNotes {
   cardKey: string;
   blocks: Block[];
 }
 
-interface PendingFocus {
-  id: string;
-  caret: number;
+interface HistoryEntry {
+  blocks: Block[];
+  focus: PendingFocus | null;
 }
 
-let blockCounter = 0;
-const createBlock = (kind: BlockKind = 'text', text = ''): Block => {
-  blockCounter += 1;
-  return { id: `b${Date.now().toString(36)}${blockCounter}`, kind, text };
-};
+interface CommitOptions {
+  /** Id of the line being typed in; consecutive typing is merged into one undo step. */
+  typingIn?: string;
+}
 
-const emptyNotes = (): Block[] => [createBlock()];
-
-const hasContent = (blocks: Block[]) => blocks.some((block) => block.text.trim().length > 0);
-
-const isValidBlock = (value: unknown): value is Block => {
-  const block = value as Block;
-  return (
-    !!block &&
-    typeof block.id === 'string' &&
-    typeof block.text === 'string' &&
-    (block.kind === 'text' || block.kind === 'bullet' || block.kind === 'number')
-  );
-};
-
-/** Numbers for numbered items; consecutive numbered blocks form one run. */
-const computeNumbers = (blocks: Block[]): (number | null)[] => {
-  const numbers: (number | null)[] = [];
-  blocks.forEach((block, index) => {
-    if (block.kind !== 'number') {
-      numbers.push(null);
-      return;
-    }
-    const previous = index > 0 ? numbers[index - 1] : null;
-    numbers.push(previous !== null ? previous + 1 : block.start ?? 1);
-  });
-  return numbers;
-};
-
-/** Plain-text export of all lines, used for copy and cut of the whole field. */
-const serializeBlocks = (blocks: Block[]): string => {
-  const numbers = computeNumbers(blocks);
-  return blocks
-    .map((block, index) => {
-      if (block.kind === 'bullet') {
-        return `- ${block.text}`;
-      }
-      if (block.kind === 'number') {
-        return `${numbers[index]}. ${block.text}`;
-      }
-      return block.text;
-    })
-    .join('\n');
-};
-
-/** Turn the start of a plain line into a list item if it carries a list prefix. */
-const applyListTrigger = (text: string): Omit<Block, 'id'> => {
-  const bulletMatch = text.match(BULLET_TRIGGER);
-  if (bulletMatch) {
-    return { kind: 'bullet', text: text.slice(bulletMatch[0].length) };
-  }
-  const numberMatch = text.match(NUMBER_TRIGGER);
-  if (numberMatch) {
-    return {
-      kind: 'number',
-      text: text.slice(numberMatch[0].length),
-      start: parseInt(numberMatch[1], 10),
-    };
-  }
-  return { kind: 'text', text };
-};
-
-/** Parse pasted multi-line text into lines, recognising "- " and "1. " prefixes. */
-const parseText = (text: string): Block[] =>
-  text
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => {
-      const parsed = applyListTrigger(line);
-      return { ...createBlock(parsed.kind, parsed.text), start: parsed.start };
-    });
+const HISTORY_LIMIT = 200;
+const TYPING_GROUP_MS = 1000;
 
 /** Resize a text area to fit its content so wrapped lines never scroll. */
 const fitToContent = (textArea: HTMLTextAreaElement | null) => {
@@ -140,6 +70,8 @@ const fitToContent = (textArea: HTMLTextAreaElement | null) => {
  * - Option/Alt+Enter   line break inside the current line
  * - Backspace at 0     removes the list marker, then merges with the line above
  * - Arrow Up/Down      move between lines at the start/end of a line
+ * - Cmd/Ctrl+A         selects the whole field
+ * - Cmd/Ctrl+Z         undo across all lines (Shift+Cmd/Ctrl+Z or Ctrl+Y to redo)
  * - Esc                leaves the field so queue shortcuts work again
  *
  * Notes are never written to the knowledge base. A copy is mirrored into
@@ -154,17 +86,39 @@ export const FlashcardNotesWidget = () => {
   const [allSelected, setAllSelected] = useState(false);
   const textAreaRefs = useRef(new Map<string, HTMLTextAreaElement>());
   const pendingFocus = useRef<PendingFocus | null>(null);
+  // Field-wide undo/redo history; native text area undo only covers a single line.
+  const blocksRef = useRef<Block[]>(blocks);
+  blocksRef.current = blocks;
+  const undoStack = useRef<HistoryEntry[]>([]);
+  const redoStack = useRef<HistoryEntry[]>([]);
+  const lastTyping = useRef<{ id: string; time: number } | null>(null);
+
+  const resetHistory = () => {
+    undoStack.current = [];
+    redoStack.current = [];
+    lastTyping.current = null;
+  };
+
+  /** Caret position of the focused line, used to restore the cursor on undo/redo. */
+  const currentFocus = (): PendingFocus | null => {
+    for (const [id, textArea] of textAreaRefs.current) {
+      if (textArea === document.activeElement) {
+        return { id, caret: textArea.selectionStart };
+      }
+    }
+    return null;
+  };
 
   const widgetContext = useTrackerPlugin(
     async (reactivePlugin) =>
-      await reactivePlugin.widget.getWidgetContext<WidgetLocation.FlashcardUnder>(),
+      await reactivePlugin.widget.getWidgetContext<WidgetLocation.FlashcardUnder>()
   );
   const minRowsSetting = useTrackerPlugin(
-    async (reactivePlugin) => await reactivePlugin.settings.getSetting<number>(SETTING_MIN_ROWS),
+    async (reactivePlugin) => await reactivePlugin.settings.getSetting<number>(SETTING_MIN_ROWS)
   );
   const hideAfterReveal = useTrackerPlugin(
     async (reactivePlugin) =>
-      await reactivePlugin.settings.getSetting<boolean>(SETTING_HIDE_AFTER_REVEAL),
+      await reactivePlugin.settings.getSetting<boolean>(SETTING_HIDE_AFTER_REVEAL)
   );
 
   const cardKey = widgetContext?.cardId ?? widgetContext?.remId;
@@ -191,6 +145,7 @@ export const FlashcardNotesWidget = () => {
         stored.blocks.every(isValidBlock)
           ? stored.blocks
           : null;
+      resetHistory();
       setBlocks(restored ?? emptyNotes());
     };
     void restoreNotes();
@@ -199,22 +154,70 @@ export const FlashcardNotesWidget = () => {
     };
   }, [cardKey, plugin]);
 
-  const commitBlocks = useCallback(
-    (nextBlocks: Block[], focus?: PendingFocus) => {
-      const safeBlocks = nextBlocks.length > 0 ? nextBlocks : emptyNotes();
+  /** Render blocks, move the caret and mirror the notes into session storage. */
+  const applyBlocks = useCallback(
+    (nextBlocks: Block[], focus?: PendingFocus | null) => {
       if (focus) {
         pendingFocus.current = focus;
       }
-      setBlocks(safeBlocks);
+      setBlocks(nextBlocks);
       if (cardKey) {
-        void plugin.storage.setSession(SESSION_NOTES_KEY, { cardKey, blocks: safeBlocks });
+        void plugin.storage.setSession(SESSION_NOTES_KEY, { cardKey, blocks: nextBlocks });
       }
     },
-    [cardKey, plugin],
+    [cardKey, plugin]
   );
+
+  /** Apply an edit and record the previous state for undo. */
+  const commitBlocks = (nextBlocks: Block[], focus?: PendingFocus, options: CommitOptions = {}) => {
+    const safeBlocks = nextBlocks.length > 0 ? nextBlocks : emptyNotes();
+    const previousBlocks = blocksRef.current;
+
+    // Caret-only moves (same array) are not edits.
+    if (safeBlocks !== previousBlocks) {
+      const now = Date.now();
+      const continuesTyping =
+        options.typingIn !== undefined &&
+        lastTyping.current?.id === options.typingIn &&
+        now - lastTyping.current.time < TYPING_GROUP_MS;
+      if (!continuesTyping) {
+        undoStack.current.push({ blocks: previousBlocks, focus: currentFocus() });
+        if (undoStack.current.length > HISTORY_LIMIT) {
+          undoStack.current.shift();
+        }
+      }
+      redoStack.current = [];
+      lastTyping.current = options.typingIn ? { id: options.typingIn, time: now } : null;
+    }
+
+    applyBlocks(safeBlocks, focus);
+  };
+
+  const undo = () => {
+    const entry = undoStack.current.pop();
+    if (!entry) {
+      return;
+    }
+    redoStack.current.push({ blocks: blocksRef.current, focus: currentFocus() });
+    lastTyping.current = null;
+    setAllSelected(false);
+    applyBlocks(entry.blocks, entry.focus);
+  };
+
+  const redo = () => {
+    const entry = redoStack.current.pop();
+    if (!entry) {
+      return;
+    }
+    undoStack.current.push({ blocks: blocksRef.current, focus: currentFocus() });
+    lastTyping.current = null;
+    setAllSelected(false);
+    applyBlocks(entry.blocks, entry.focus);
+  };
 
   // A new card starts with an empty field.
   useAPIEventListener(AppEvents.QueueLoadCard, undefined, () => {
+    resetHistory();
     setBlocks(emptyNotes());
     setRevealedByEvent(false);
     void plugin.storage.setSession(SESSION_NOTES_KEY, null);
@@ -248,10 +251,15 @@ export const FlashcardNotesWidget = () => {
     }
   };
 
-  const replaceBlock = (index: number, block: Block, focus?: PendingFocus) => {
+  const replaceBlock = (
+    index: number,
+    block: Block,
+    focus?: PendingFocus,
+    options?: CommitOptions
+  ) => {
     const next = blocks.slice();
     next[index] = block;
-    commitBlocks(next, focus);
+    commitBlocks(next, focus, options);
   };
 
   const handleChange = (index: number, event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -261,21 +269,14 @@ export const FlashcardNotesWidget = () => {
 
     setAllSelected(false);
 
-    // Markdown-style list triggers only apply to plain lines.
-    if (block.kind === 'text') {
-      const parsed = applyListTrigger(value);
-      if (parsed.kind !== 'text') {
-        const prefixLength = value.length - parsed.text.length;
-        replaceBlock(
-          index,
-          { id: block.id, ...parsed },
-          { id: block.id, caret: Math.max(0, caret - prefixLength) },
-        );
-        return;
-      }
+    // Plain lines starting with "- " or "1. " become list items (a separate undo step);
+    // other typing is grouped per line so one undo step removes a burst of characters.
+    const change = applyTextChange(block, value, caret);
+    if (change.isListTrigger) {
+      replaceBlock(index, change.block, { id: block.id, caret: change.caret });
+      return;
     }
-
-    replaceBlock(index, { ...block, text: value });
+    replaceBlock(index, change.block, undefined, { typingIn: block.id });
   };
 
   const handleKeyDown = (index: number, event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -304,6 +305,22 @@ export const FlashcardNotesWidget = () => {
       event.preventDefault();
       textArea.setSelectionRange(0, value.length);
       setAllSelected(true);
+      return;
+    }
+
+    // Field-wide undo/redo: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y.
+    if (isShortcut && !event.altKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
+    }
+    if (event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
       return;
     }
 
@@ -337,7 +354,7 @@ export const FlashcardNotesWidget = () => {
       replaceBlock(
         index,
         { ...block, text: textArea.value },
-        { id: block.id, caret: textArea.selectionStart },
+        { id: block.id, caret: textArea.selectionStart }
       );
       return;
     }
@@ -363,7 +380,11 @@ export const FlashcardNotesWidget = () => {
       // First remove the list marker, keeping the text.
       if (block.kind !== 'text') {
         event.preventDefault();
-        replaceBlock(index, { id: block.id, kind: 'text', text: value }, { id: block.id, caret: 0 });
+        replaceBlock(
+          index,
+          { id: block.id, kind: 'text', text: value },
+          { id: block.id, caret: 0 }
+        );
         return;
       }
       if (index === 0) {
@@ -422,12 +443,24 @@ export const FlashcardNotesWidget = () => {
     replaceAll(emptyNotes());
   };
 
-  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!allSelected) {
+  const handlePaste = (index: number, event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = event.clipboardData.getData('text/plain');
+
+    if (allSelected) {
+      event.preventDefault();
+      replaceAll(parseText(pasted.replace(/\r\n?/g, '\n').replace(/\n+$/, '')));
+      return;
+    }
+
+    const { selectionStart, selectionEnd } = event.currentTarget;
+    const result = pasteIntoBlocks(blocks, index, selectionStart, selectionEnd, pasted);
+    if (!result) {
+      // Single line: native paste; list triggers still apply via onChange.
       return;
     }
     event.preventDefault();
-    replaceAll(parseText(event.clipboardData.getData('text/plain')));
+    setAllSelected(false);
+    commitBlocks(result.blocks, result.focus);
   };
 
   const clearNotes = () => {
@@ -499,7 +532,7 @@ export const FlashcardNotesWidget = () => {
                 onKeyDown={(event) => handleKeyDown(index, event)}
                 onCopy={handleCopy}
                 onCut={handleCut}
-                onPaste={handlePaste}
+                onPaste={(event) => handlePaste(index, event)}
                 onMouseDown={() => setAllSelected(false)}
                 onBlur={() => setAllSelected(false)}
               />

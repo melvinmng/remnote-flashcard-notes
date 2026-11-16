@@ -25,6 +25,9 @@ The field starts as plain text. Lists start with Markdown-style prefixes at the 
 
 Wrapped lines and line breaks stay indented behind the bullet or number.
 
+Pasting multi-line text splits it into separate lines. Lines starting with `- ` or `1. ` become
+list items, so lists copied from elsewhere keep their structure.
+
 ### Keyboard shortcuts
 
 | Key | Action |
@@ -36,6 +39,8 @@ Wrapped lines and line breaks stay indented behind the bullet or number.
 | `Backspace` at the start of a plain line | Merge it into the line above |
 | `↑` / `↓` at the start / end of a line | Move to the previous / next line |
 | `Cmd` + `A` / `Ctrl` + `A` | Select the whole field (all lines). Then `Backspace` clears it, typing replaces it, `Cmd`/`Ctrl` + `C`/`X` copies or cuts it as Markdown-style text |
+| `Cmd` + `Z` / `Ctrl` + `Z` | Undo across all lines (typing bursts are undone together) |
+| `Cmd` + `Shift` + `Z` / `Ctrl` + `Shift` + `Z` / `Ctrl` + `Y` | Redo |
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
 The clear button (×) in the top-right corner of the field empties the field. The field is also
@@ -100,6 +105,7 @@ to repeat steps 1–4.
 |---|---|
 | `npm run dev` | Development server with hot reload on port 8080 |
 | `npm run check-types` | TypeScript type check |
+| `npm test` | Behavior tests for list parsing, copy/paste and serialization |
 | `npm run build` | Validate manifest/README/logo, build to `dist/` and create `PluginZip.zip` |
 
 ### Troubleshooting
@@ -132,8 +138,11 @@ src/
   widgets/
     index.tsx            Plugin entry: registers settings and the queue widget
     flashcard_notes.tsx  Notes field (list editor, keyboard handling, session restore)
+  notes_model.ts         Pure data model: list detection, paste and copy logic
   index.css              Widget styles (light/dark theme)
   style.css              Tailwind base styles from the RemNote template
+scripts/
+  test_notes_model.ts    Tests for notes_model.ts (npm test)
 webpack.config.js        Build configuration (one bundle per widget)
 ```
 

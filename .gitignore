@@ -6,3 +6,4 @@ dist-ssr
 *.zip
 dev-server.log
 node_modules.nosync
+dist-test
