@@ -21,7 +21,7 @@ Start a flashcard queue. The notes field appears below the question. Click into 
 | `Enter` | Start a new bullet (splits the bullet at the cursor) |
 | `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) | Line break inside the current bullet |
 | `Backspace` at the start of a bullet | Merge it into the previous bullet |
-| `↑` / `↓` on the first / last line | Move to the previous / next bullet |
+| `↑` / `↓` at the start / end of a bullet | Move to the previous / next bullet |
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
 Wrapped lines and line breaks stay indented behind the bullet dot.
@@ -44,8 +44,7 @@ Open RemNote **Settings → Plugins → Flashcard Notes**.
 - `requestNative` is `false`: the plugin runs in RemNote's sandboxed iframe.
 - No network requests.
 - Notes live only in memory and in RemNote's plugin session storage (so they survive a re-render of
-  the widget when the answer is revealed). Session storage is cleared when the next card loads and
-  when RemNote restarts.
+  the widget when the answer is revealed). The stored copy is cleared when the next card loads.
 
 ## Local development
 

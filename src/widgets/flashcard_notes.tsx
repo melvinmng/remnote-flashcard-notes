@@ -60,7 +60,7 @@ const fitToContent = (textArea: HTMLTextAreaElement | null) => {
  * - Enter            splits the bullet at the caret and starts a new bullet
  * - Option/Alt+Enter inserts a line break inside the current bullet
  * - Backspace at 0   merges the bullet into the previous one
- * - Arrow Up/Down    move between bullets at the first/last line
+ * - Arrow Up/Down    move between bullets at the start/end of a bullet
  * - Esc              leaves the field so queue shortcuts work again
  *
  * Notes are never written to the knowledge base. A copy is mirrored into
@@ -222,7 +222,8 @@ export const FlashcardNotesWidget = () => {
       return;
     }
 
-    if (event.key === 'ArrowUp' && index > 0 && !value.slice(0, selectionStart).includes('\n')) {
+    // Only jump between bullets at the very start/end so wrapped lines stay navigable.
+    if (event.key === 'ArrowUp' && index > 0 && selectionStart === 0 && selectionEnd === 0) {
       const previous = bullets[index - 1];
       event.preventDefault();
       commitBullets(bullets, { id: previous.id, caret: previous.text.length });
@@ -232,7 +233,8 @@ export const FlashcardNotesWidget = () => {
     if (
       event.key === 'ArrowDown' &&
       index < bullets.length - 1 &&
-      !value.slice(selectionEnd).includes('\n')
+      selectionStart === value.length &&
+      selectionEnd === value.length
     ) {
       event.preventDefault();
       commitBullets(bullets, { id: bullets[index + 1].id, caret: 0 });
