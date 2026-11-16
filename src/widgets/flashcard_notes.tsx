@@ -36,6 +36,9 @@ const SETTING_MIN_ROWS = 'min-rows';
 const SETTING_HIDE_AFTER_REVEAL = 'hide-after-reveal';
 const DEFAULT_MIN_ROWS = 2;
 const LINE_HEIGHT_PX = 24;
+
+/** Injected by webpack: "dev <version> · <build time>" in development, empty in production. */
+declare const __DEV_BUILD_LABEL__: string;
 /** Horizontal offset per nesting level; equals the bullet marker column. */
 const INDENT_STEP_PX = 26;
 const SESSION_NOTES_KEY = 'flashcard-notes:current:v2';
@@ -656,6 +659,7 @@ export const FlashcardNotesWidget = () => {
             <kbd>Esc</kbd> back to queue
           </span>
         </div>
+        {__DEV_BUILD_LABEL__ && <span className="fn-dev-label">{__DEV_BUILD_LABEL__}</span>}
         {listItemCount > 0 && (
           <span className="fn-count" aria-live="polite">
             {listItemCount} {listItemCount === 1 ? 'bullet' : 'bullets'}

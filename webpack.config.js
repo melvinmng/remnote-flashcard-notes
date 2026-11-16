@@ -4,7 +4,7 @@ var path = require('path');
 
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { ESBuildMinifyPlugin } = require('esbuild-loader');
-const { ProvidePlugin, BannerPlugin } = require('webpack');
+const { ProvidePlugin, BannerPlugin, DefinePlugin } = require('webpack');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
 
@@ -60,6 +60,14 @@ const config = {
     ],
   },
   plugins: [
+    // Dev-only build label shown in the widget footer, so a stale bundle is easy to spot.
+    new DefinePlugin({
+      __DEV_BUILD_LABEL__: JSON.stringify(
+        isDevelopment
+          ? `dev ${require('./package.json').version} · ${new Date().toTimeString().slice(0, 5)}`
+          : ''
+      ),
+    }),
     isDevelopment
       ? undefined
       : new MiniCssExtractPlugin({
@@ -117,6 +125,8 @@ if (isProd) {
     compress: true,
     watchFiles: ['src/*'],
     headers: {
+      // RemNote must always fetch the latest bundle during development.
+      'Cache-Control': 'no-store',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'baggage, sentry-trace',
     },

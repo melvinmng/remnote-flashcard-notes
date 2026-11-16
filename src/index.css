@@ -239,3 +239,15 @@ body.dark .fn-root {
 .fn-dot--level-2 {
   border-radius: 1px;
 }
+
+/* Development build marker (never present in production builds). */
+.fn-dev-label {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  opacity: 0.6;
+}
+
+.fn-dev-label + .fn-count {
+  margin-left: 0;
+}
