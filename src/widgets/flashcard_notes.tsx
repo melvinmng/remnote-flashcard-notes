@@ -77,7 +77,8 @@ const fitToContent = (textArea: HTMLTextAreaElement | null) => {
  *
  * Notes are never written to the knowledge base. A copy is mirrored into
  * plugin session storage so the text survives a remount of the widget
- * (e.g. when the answer is revealed). No permission scopes are required.
+ * (e.g. when the answer is revealed). Only the minimal read-only FocusedSubtree
+ * scope is requested, because RemNote rejects API calls from plugins without one.
  */
 export const FlashcardNotesWidget = () => {
   const plugin = usePlugin();

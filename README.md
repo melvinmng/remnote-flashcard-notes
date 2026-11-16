@@ -8,7 +8,7 @@ card and rate yourself as usual.
 
 - No grading, no AI credits: the field is a plain scratchpad.
 - Notes are temporary and never written to your knowledge base.
-- The plugin requests no permissions.
+- Only a minimal read-only permission (see Privacy); it never touches your Rems.
 
 ## Usage
 
@@ -68,7 +68,12 @@ Open RemNote **Settings → Plugins → Flashcard Notes**.
 
 ## Privacy
 
-- `requiredScopes` is empty: the plugin cannot read or modify any of your Rems.
+- The plugin requests a single read-only scope: `FocusedSubtree` with level `Read`. RemNote
+  requires every plugin to hold at least one scope with `Read` level before any plugin API call
+  (including activation and event listeners) is accepted. `FocusedSubtree` is the narrowest such
+  scope; the plugin never reads, creates, modifies or deletes any Rem.
+- You do not need to grant additional access ("Grant access to all bullets" etc.) in the plugin's
+  permission dialog.
 - `requestNative` is `false`: the plugin runs in RemNote's sandboxed iframe.
 - No network requests.
 - Notes live only in memory and in RemNote's plugin session storage (so they survive a re-render of
