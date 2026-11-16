@@ -229,3 +229,13 @@ body.dark .fn-root {
     opacity: 1;
   }
 }
+
+/* Nested bullets: filled dot, hollow circle, small square (repeating). */
+.fn-dot--level-1 {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--fn-dot);
+}
+
+.fn-dot--level-2 {
+  border-radius: 1px;
+}

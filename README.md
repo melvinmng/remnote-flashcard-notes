@@ -25,11 +25,16 @@ The field starts as plain text. Lists start with Markdown-style prefixes at the 
 
 Wrapped lines and line breaks stay indented behind the bullet or number.
 
+Press `Tab` in a list item to nest it under the item above, and `Shift` + `Tab` to move it back.
+Nested items move together with their parent. Numbers are counted per level, and nested bullets
+use a hollow circle and a small square to tell the levels apart.
+
 ### Mobile
 
 The plugin is enabled on mobile. Lists (`- ` / `1. `), `Enter` for the next item, the counter and
 the clear button work with the touch keyboard. Keyboard shortcuts that need a hardware keyboard
-(`Option` + `Enter`, `Cmd` + `A`, `Esc`, undo shortcuts) are desktop-only, and the shortcut hints
+(`Tab` / `Shift` + `Tab` for nesting, `Option` + `Enter`, `Cmd` + `A`, `Esc`, undo shortcuts) are
+desktop-only, and the shortcut hints
 are hidden on touch devices.
 
 Pasting multi-line text splits it into separate lines. Lines starting with `- ` or `1. ` become
@@ -40,11 +45,14 @@ list items, so lists copied from elsewhere keep their structure.
 | Key | Action |
 |---|---|
 | `Enter` | New line; inside a list it starts the next item (splits at the cursor) |
-| `Enter` on an empty list item | End the list and continue with plain text |
+| `Tab` / `Shift` + `Tab` in a list item | Indent / outdent the item together with its nested items |
+| `Enter` on an empty nested item | Move it one level up |
+| `Enter` on an empty top-level item | End the list and continue with plain text |
 | `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) | Line break inside the current line or item |
-| `Backspace` at the start of a list item | Remove the bullet or number, keep the text |
+| `Backspace` at the start of a nested item | Move it one level up |
+| `Backspace` at the start of a top-level item | Remove the bullet or number, keep the text |
 | `Backspace` at the start of a plain line | Merge it into the line above |
-| `↑` / `↓` at the start / end of a line | Move to the previous / next line |
+| `↑` / `↓` on the first / last visual line | Move to the previous / next item, keeping the cursor column; inside a wrapped item the cursor moves line by line |
 | `Cmd` + `A` / `Ctrl` + `A` | Select the whole field (all lines). Then `Backspace` clears it, typing replaces it, `Cmd`/`Ctrl` + `C`/`X` copies or cuts it as Markdown-style text |
 | `Cmd` + `Z` / `Ctrl` + `Z` | Undo across all lines (typing bursts are undone together) |
 | `Cmd` + `Shift` + `Z` / `Ctrl` + `Shift` + `Z` / `Ctrl` + `Y` | Redo |
@@ -52,7 +60,8 @@ list items, so lists copied from elsewhere keep their structure.
 
 A small counter below the field shows how many list items you have written (for example
 `3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. It counts filled
-bullets and numbered items; plain lines and empty items are not counted.
+top-level bullets and numbered items, like RemNote's hint counts the direct children of a card.
+Nested items, plain lines and empty items are not counted.
 
 The clear button (×) in the top-right corner of the field empties the field. The field is also
 cleared automatically when the next card loads.
@@ -154,11 +163,12 @@ src/
   widgets/
     index.tsx            Plugin entry: registers settings and the queue widget
     flashcard_notes.tsx  Notes field (list editor, keyboard handling, session restore)
-  notes_model.ts         Pure data model: list detection, paste and copy logic
+  notes_model.ts         Pure data model: list detection, nesting, paste and copy logic
+  caret_geometry.ts      Visual-line detection for arrow-key navigation
   index.css              Widget styles (light/dark theme)
   style.css              Tailwind base styles from the RemNote template
 scripts/
-  test_notes_model.ts    Tests for notes_model.ts (npm test)
+  test_notes_model.ts    Tests for notes_model.ts and caret_geometry.ts (npm test)
 webpack.config.js        Build configuration (one bundle per widget)
 ```
 

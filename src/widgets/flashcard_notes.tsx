@@ -15,12 +15,20 @@ import {
   createBlock,
   emptyNotes,
   hasContent,
+  indentOf,
   isValidBlock,
   parseText,
   pasteIntoBlocks,
   type PendingFocus,
   serializeBlocks,
+  shiftIndent,
 } from '../notes_model';
+import {
+  closestOffsetOnLine,
+  isOnFirstLine,
+  isOnLastLine,
+  measureCaretPositions,
+} from '../caret_geometry';
 import '../style.css';
 import '../index.css';
 
@@ -28,6 +36,8 @@ const SETTING_MIN_ROWS = 'min-rows';
 const SETTING_HIDE_AFTER_REVEAL = 'hide-after-reveal';
 const DEFAULT_MIN_ROWS = 2;
 const LINE_HEIGHT_PX = 24;
+/** Horizontal offset per nesting level; equals the bullet marker column. */
+const INDENT_STEP_PX = 26;
 const SESSION_NOTES_KEY = 'flashcard-notes:current:v2';
 
 interface StoredNotes {
@@ -70,7 +80,8 @@ const fitToContent = (textArea: HTMLTextAreaElement | null) => {
  *                      on an empty list item it ends the list
  * - Option/Alt+Enter   line break inside the current line
  * - Backspace at 0     removes the list marker, then merges with the line above
- * - Arrow Up/Down      move between lines at the start/end of a line
+ * - Tab / Shift+Tab    indent / outdent a list item with its children
+ * - Arrow Up/Down      move between lines from the first/last visual line
  * - Cmd/Ctrl+A         selects the whole field
  * - Cmd/Ctrl+Z         undo across all lines (Shift+Cmd/Ctrl+Z or Ctrl+Y to redo)
  * - Esc                leaves the field so queue shortcuts work again
@@ -339,6 +350,11 @@ export const FlashcardNotesWidget = () => {
         replaceAll(emptyNotes());
         return;
       }
+      if (event.key === 'Tab') {
+        // Indenting the whole field is not supported; keep the selection.
+        event.preventDefault();
+        return;
+      }
       if (event.key.length === 1 && !isShortcut) {
         // Typing replaces the whole selection, like in a single text field.
         event.preventDefault();
@@ -347,6 +363,16 @@ export const FlashcardNotesWidget = () => {
       }
       // Any other key (arrows, Tab, ...) collapses the selection to the current line.
       setAllSelected(false);
+    }
+
+    // Tab / Shift+Tab indent and outdent list items together with their children.
+    if (event.key === 'Tab' && !isShortcut && !event.altKey) {
+      event.preventDefault();
+      const shifted = shiftIndent(blocks, index, event.shiftKey ? -1 : 1);
+      if (shifted) {
+        commitBlocks(shifted, { id: block.id, caret: selectionStart });
+      }
+      return;
     }
 
     if (event.key === 'Enter' && event.altKey) {
@@ -364,14 +390,26 @@ export const FlashcardNotesWidget = () => {
     if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
 
-      // Enter on an empty list item ends the list.
+      // Enter on an empty nested item moves it one level up.
+      if (block.kind !== 'text' && value.length === 0 && indentOf(block) > 0) {
+        const outdented = shiftIndent(blocks, index, -1);
+        if (outdented) {
+          commitBlocks(outdented, { id: block.id, caret: 0 });
+        }
+        return;
+      }
+
+      // Enter on an empty top-level list item ends the list.
       if (block.kind !== 'text' && value.length === 0) {
         replaceBlock(index, { id: block.id, kind: 'text', text: '' }, { id: block.id, caret: 0 });
         return;
       }
 
       // Split at the caret; list items continue the list.
-      const newBlock = createBlock(block.kind, value.slice(selectionEnd));
+      const newBlock = {
+        ...createBlock(block.kind, value.slice(selectionEnd)),
+        indent: indentOf(block),
+      };
       const next = blocks.slice();
       next.splice(index, 1, { ...block, text: value.slice(0, selectionStart) }, newBlock);
       commitBlocks(next, { id: newBlock.id, caret: 0 });
@@ -379,7 +417,16 @@ export const FlashcardNotesWidget = () => {
     }
 
     if (event.key === 'Backspace' && selectionStart === 0 && selectionEnd === 0) {
-      // First remove the list marker, keeping the text.
+      // First move a nested item one level up.
+      if (block.kind !== 'text' && indentOf(block) > 0) {
+        event.preventDefault();
+        const outdented = shiftIndent(blocks, index, -1);
+        if (outdented) {
+          commitBlocks(outdented, { id: block.id, caret: 0 });
+        }
+        return;
+      }
+      // Then remove the list marker, keeping the text.
       if (block.kind !== 'text') {
         event.preventDefault();
         replaceBlock(
@@ -401,22 +448,37 @@ export const FlashcardNotesWidget = () => {
       return;
     }
 
-    // Only jump between lines at the very start/end so wrapped lines stay navigable.
-    if (event.key === 'ArrowUp' && index > 0 && selectionStart === 0 && selectionEnd === 0) {
-      const previous = blocks[index - 1];
+    // Arrow Up/Down move to the neighbouring line when the caret is on the first/last
+    // visual line; inside a wrapped line the native caret movement is kept.
+    const isPlainArrow =
+      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !isShortcut &&
+      selectionStart === selectionEnd;
+    if (isPlainArrow) {
+      const targetIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;
+      const target = blocks[targetIndex];
+      const targetArea = target ? textAreaRefs.current.get(target.id) : undefined;
+      if (!target || !targetArea) {
+        return;
+      }
+      const positions = measureCaretPositions(textArea);
+      const atEdge =
+        event.key === 'ArrowUp'
+          ? isOnFirstLine(positions, selectionStart)
+          : isOnLastLine(positions, selectionStart);
+      if (!atEdge) {
+        return;
+      }
       event.preventDefault();
-      commitBlocks(blocks, { id: previous.id, caret: previous.text.length });
-      return;
-    }
-
-    if (
-      event.key === 'ArrowDown' &&
-      index < blocks.length - 1 &&
-      selectionStart === value.length &&
-      selectionEnd === value.length
-    ) {
-      event.preventDefault();
-      commitBlocks(blocks, { id: blocks[index + 1].id, caret: 0 });
+      const caretX = positions[selectionStart].left;
+      const targetCaret = closestOffsetOnLine(
+        measureCaretPositions(targetArea),
+        event.key === 'ArrowUp' ? 'last' : 'first',
+        caretX
+      );
+      commitBlocks(blocks, { id: target.id, caret: targetCaret });
     }
   };
 
@@ -501,10 +563,14 @@ export const FlashcardNotesWidget = () => {
       >
         <div className="fn-list">
           {blocks.map((block, index) => (
-            <div key={block.id} className={`fn-line fn-line--${block.kind}`}>
+            <div
+              key={block.id}
+              className={`fn-line fn-line--${block.kind}`}
+              style={{ paddingLeft: `${indentOf(block) * INDENT_STEP_PX}px` }}
+            >
               {block.kind === 'bullet' && (
                 <span className="fn-marker" aria-hidden="true">
-                  <span className="fn-dot" />
+                  <span className={`fn-dot fn-dot--level-${indentOf(block) % 3}`} />
                 </span>
               )}
               {block.kind === 'number' && (

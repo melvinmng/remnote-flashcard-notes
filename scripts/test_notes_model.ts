@@ -11,12 +11,24 @@ import {
   parseText,
   pasteIntoBlocks,
   serializeBlocks,
+  shiftIndent,
 } from '../src/notes_model';
+import { closestOffsetOnLine, isOnFirstLine, isOnLastLine } from '../src/caret_geometry';
 
+/** Build a list item at a nesting level. */
+const item = (kind: 'bullet' | 'number', text: string, indent = 0, start?: number): Block => ({
+  ...createBlock(kind, text, start),
+  indent,
+});
+
+/** Comparable view of blocks: ids dropped, start/indent only when set. */
 const shape = (blocks: Block[]) =>
-  blocks.map(({ kind, text, start }) =>
-    start === undefined ? { kind, text } : { kind, text, start }
-  );
+  blocks.map(({ kind, text, start, indent }) => ({
+    kind,
+    text,
+    ...(start !== undefined ? { start } : {}),
+    ...(indent ? { indent } : {}),
+  }));
 
 const cases: [string, () => void][] = [];
 const test = (name: string, run: () => void) => cases.push([name, run]);
@@ -103,13 +115,119 @@ test('pasting replaces the selected range', () => {
   ]);
 });
 
-test('nested lists from other apps are flattened and Windows line endings handled', () => {
-  const blocks = parseText('- top\r\n  - nested\r\n    1. deep');
+test('nested lists keep their levels and Windows line endings are handled', () => {
+  const blocks = parseText('- top\r\n  - nested\r\n    1. deep\r\n- back');
   assert.deepEqual(shape(blocks), [
     { kind: 'bullet', text: 'top' },
-    { kind: 'bullet', text: 'nested' },
-    { kind: 'number', text: 'deep', start: 1 },
+    { kind: 'bullet', text: 'nested', indent: 1 },
+    { kind: 'number', text: 'deep', start: 1, indent: 2 },
+    { kind: 'bullet', text: 'back' },
   ]);
+});
+
+test('2-space, 4-space and tab indentation give the same levels', () => {
+  for (const unit of ['  ', '    ', '\t']) {
+    const blocks = parseText(`- a\n${unit}- b\n${unit}${unit}- c\n${unit}- d`);
+    assert.deepEqual(
+      blocks.map((block) => block.indent),
+      [0, 1, 2, 1],
+      `indent unit ${JSON.stringify(unit)}`
+    );
+  }
+});
+
+test('Tab cannot indent the first item or skip a level', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'b')];
+  assert.equal(shiftIndent(blocks, 0, 1), null, 'first item stays at level 0');
+  const once = shiftIndent(blocks, 1, 1);
+  assert.ok(once);
+  assert.equal(once[1].indent, 1);
+  assert.equal(shiftIndent(once, 1, 1), null, 'cannot go two levels deeper than the parent');
+});
+
+test('Tab and Shift+Tab move an item together with its children', () => {
+  const blocks = [
+    item('bullet', 'a'),
+    item('bullet', 'b'),
+    item('bullet', 'b.1', 1),
+    item('bullet', 'b.1.1', 2),
+    item('bullet', 'c'),
+  ];
+  const indented = shiftIndent(blocks, 1, 1);
+  assert.ok(indented);
+  assert.deepEqual(
+    indented.map((block) => block.indent ?? 0),
+    [0, 1, 2, 3, 0]
+  );
+  const outdented = shiftIndent(indented, 1, -1);
+  assert.ok(outdented);
+  assert.deepEqual(
+    outdented.map((block) => block.indent ?? 0),
+    [0, 0, 1, 2, 0]
+  );
+  assert.equal(shiftIndent(blocks, 0, -1), null, 'top level cannot be outdented');
+  assert.equal(shiftIndent([createBlock('text', 'plain')], 0, 1), null, 'plain lines are ignored');
+});
+
+test('nested numbering continues the parent run and restarts below', () => {
+  const blocks = [
+    item('number', 'a', 0, 1),
+    item('bullet', 'x', 1),
+    item('number', 'x1', 1),
+    item('number', 'x2', 1),
+    item('number', 'b', 0),
+    item('number', 'y1', 1),
+  ];
+  assert.deepEqual(computeNumbers(blocks), [1, null, 1, 2, 2, 1]);
+});
+
+test('a nested list with line breaks survives serialize and parse', () => {
+  const original = [
+    item('number', 'first\nwrapped', 0, 1),
+    item('bullet', 'child\nchild line', 1),
+    item('number', 'grandchild', 2, 1),
+    item('number', 'second', 0),
+  ];
+  const serialized = serializeBlocks(original);
+  assert.equal(
+    serialized,
+    '1. first\n   wrapped\n    - child\n      child line\n        1. grandchild\n2. second'
+  );
+  // Parsed numbered items carry an explicit start; compare structure and rendered numbers.
+  const reparsed = parseText(serialized);
+  const withoutStart = (blocks: Block[]) => shape(blocks).map(({ start: _start, ...rest }) => rest);
+  assert.deepEqual(withoutStart(reparsed), withoutStart(original));
+  assert.deepEqual(computeNumbers(reparsed), computeNumbers(original));
+});
+
+test('pasted lists are nested relative to the current item', () => {
+  const blocks = [item('bullet', 'parent'), item('bullet', '', 1)];
+  const result = pasteIntoBlocks(blocks, 1, 0, 0, '- a\n    - b');
+  assert.ok(result);
+  assert.deepEqual(
+    result.blocks.map((block) => block.indent ?? 0),
+    [0, 1, 2]
+  );
+});
+
+test('counter counts top-level items only', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'a.1', 1), item('number', 'b', 0, 1)];
+  assert.equal(countListItems(blocks), 2);
+});
+
+test('caret geometry finds the first/last visual line and the closest column', () => {
+  // Two visual lines: offsets 0-3 on top 0, offsets 4-7 on top 24.
+  const positions = [0, 10, 20, 30, 0, 10, 20, 30].map((left, offset) => ({
+    top: offset < 4 ? 0 : 24,
+    left,
+  }));
+  assert.equal(isOnFirstLine(positions, 2), true);
+  assert.equal(isOnFirstLine(positions, 5), false);
+  assert.equal(isOnLastLine(positions, 7), true);
+  assert.equal(isOnLastLine(positions, 1), false);
+  assert.equal(closestOffsetOnLine(positions, 'last', 18), 6);
+  assert.equal(closestOffsetOnLine(positions, 'first', 100), 3);
+  assert.equal(closestOffsetOnLine([], 'first', 5), 0);
 });
 
 test('lines around the pasted block are left untouched', () => {

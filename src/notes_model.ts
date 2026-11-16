@@ -16,7 +16,19 @@ export interface Block {
   text: string;
   /** First number of a numbered run, taken from the typed prefix (e.g. "3. "). */
   start?: number;
+  /** Nesting level of a list item (0 = top level). Plain lines are always level 0. */
+  indent?: number;
 }
+
+/** Deepest nesting level reachable with Tab. */
+export const MAX_INDENT = 5;
+
+/** Spaces per nesting level in the plain-text export; valid under "- " and "1. ". */
+const SERIALIZED_INDENT = 4;
+const TAB_WIDTH = 4;
+
+export const indentOf = (block: Block): number =>
+  block.kind === 'text' ? 0 : Math.max(0, Math.min(MAX_INDENT, block.indent ?? 0));
 
 export interface PendingFocus {
   id: string;
@@ -52,27 +64,84 @@ export const isValidBlock = (value: unknown): value is Block => {
   );
 };
 
-/** Numbers for numbered items; consecutive numbered blocks form one run. */
+/**
+ * Numbers for numbered items, counted per nesting level:
+ * - consecutive numbered items on one level form a run; deeper items do not break it,
+ * - returning to a shallower level restarts the deeper runs,
+ * - a bullet breaks the run on its own level, a plain line breaks all runs.
+ */
 export const computeNumbers = (blocks: Block[]): (number | null)[] => {
   const numbers: (number | null)[] = [];
-  blocks.forEach((block, index) => {
-    if (block.kind !== 'number') {
+  let counters: (number | null)[] = [];
+  blocks.forEach((block) => {
+    if (block.kind === 'text') {
+      counters = [];
       numbers.push(null);
       return;
     }
-    const previous = index > 0 ? numbers[index - 1] : null;
-    numbers.push(previous !== null ? previous + 1 : (block.start ?? 1));
+    const level = indentOf(block);
+    counters = counters.slice(0, level + 1);
+    if (block.kind === 'bullet') {
+      counters[level] = null;
+      numbers.push(null);
+      return;
+    }
+    const previous = counters[level];
+    const value = previous !== null && previous !== undefined ? previous + 1 : (block.start ?? 1);
+    counters[level] = value;
+    numbers.push(value);
   });
   return numbers;
 };
 
 /**
- * Number of filled list items (bullets and numbered items). Empty items are
- * ignored so a freshly started item after Enter does not count yet; an item
- * with Option+Enter line breaks counts once.
+ * Indent (delta = 1) or outdent (delta = -1) the list item at `index` together with its
+ * nested children. An item can be at most one level deeper than the list item above it.
+ * Returns null when nothing changes (plain line, first item, already at the limit).
+ */
+export const shiftIndent = (blocks: Block[], index: number, delta: 1 | -1): Block[] | null => {
+  const block = blocks[index];
+  if (!block || block.kind === 'text') {
+    return null;
+  }
+  const oldIndent = indentOf(block);
+  let newIndent: number;
+  if (delta > 0) {
+    const previous = blocks[index - 1];
+    const maxIndent = previous && previous.kind !== 'text' ? indentOf(previous) + 1 : 0;
+    newIndent = Math.min(oldIndent + 1, maxIndent, MAX_INDENT);
+  } else {
+    newIndent = Math.max(0, oldIndent - 1);
+  }
+  if (newIndent === oldIndent) {
+    return null;
+  }
+  const shift = newIndent - oldIndent;
+  const next = blocks.slice();
+  next[index] = { ...block, indent: newIndent };
+  // Children are the following list items that are nested deeper than the item was.
+  for (let child = index + 1; child < next.length; child += 1) {
+    const candidate = next[child];
+    if (candidate.kind === 'text' || indentOf(candidate) <= oldIndent) {
+      break;
+    }
+    next[child] = {
+      ...candidate,
+      indent: Math.max(0, Math.min(MAX_INDENT, indentOf(candidate) + shift)),
+    };
+  }
+  return next;
+};
+
+/**
+ * Number of filled top-level list items (bullets and numbered items), matching
+ * RemNote's "Recall N bullets" hint, which counts the direct children of a card.
+ * Nested items and empty items are ignored; an item with line breaks counts once.
  */
 export const countListItems = (blocks: Block[]): number =>
-  blocks.filter((block) => block.kind !== 'text' && block.text.trim().length > 0).length;
+  blocks.filter(
+    (block) => block.kind !== 'text' && indentOf(block) === 0 && block.text.trim().length > 0
+  ).length;
 
 /** Turn the start of a plain line into a list item if it carries a list prefix. */
 export const applyListTrigger = (text: string): Omit<Block, 'id'> => {
@@ -93,8 +162,9 @@ export const applyListTrigger = (text: string): Omit<Block, 'id'> => {
 
 /**
  * Plain-text export of all lines (used for copy and cut of the whole field).
- * Line breaks inside a list item are indented to the marker width so the
- * item survives a round trip through parseText.
+ * Nested items are indented by four spaces per level; line breaks inside a
+ * list item are indented to the marker width so the item survives a round
+ * trip through parseText.
  */
 export const serializeBlocks = (blocks: Block[]): string => {
   const numbers = computeNumbers(blocks);
@@ -103,37 +173,60 @@ export const serializeBlocks = (blocks: Block[]): string => {
       if (block.kind === 'text') {
         return block.text;
       }
+      const levelIndent = ' '.repeat(indentOf(block) * SERIALIZED_INDENT);
       const marker = block.kind === 'bullet' ? '- ' : `${numbers[index]}. `;
-      const indent = ' '.repeat(marker.length);
-      return marker + block.text.split('\n').join(`\n${indent}`);
+      const continuationIndent = levelIndent + ' '.repeat(marker.length);
+      return levelIndent + marker + block.text.split('\n').join(`\n${continuationIndent}`);
     })
     .join('\n');
 };
 
+/** Visual width of leading whitespace, counting a tab as four spaces. */
+const leadingWidth = (whitespace: string): number =>
+  [...whitespace].reduce((width, char) => width + (char === '\t' ? TAB_WIDTH : 1), 0);
+
 /**
  * Parse multi-line text into lines.
- * - Lines starting with "- " or "1. " (leading whitespace ignored) become list items;
- *   nested lists from other apps are flattened.
+ * - Lines starting with "- " or "1. " become list items. Their nesting level is
+ *   derived from the leading whitespace relative to the list items above
+ *   (any consistent indentation works: 2 or 4 spaces, tabs).
  * - Indented lines directly after a list item are continuation lines of that item.
  * - Everything else becomes a plain line.
  */
 export const parseText = (text: string): Block[] => {
   const blocks: Block[] = [];
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  // Leading-whitespace widths of the currently open list levels.
+  let levelWidths: number[] = [];
 
   lines.forEach((line) => {
-    const withoutIndent = line.replace(/^[ \t]+/, '');
+    const whitespace = line.match(/^[ \t]*/)?.[0] ?? '';
+    const withoutIndent = line.slice(whitespace.length);
+    const width = leadingWidth(whitespace);
     const parsed = applyListTrigger(withoutIndent);
+    const previous = blocks[blocks.length - 1];
+
     if (parsed.kind !== 'text') {
-      blocks.push(createBlock(parsed.kind, parsed.text, parsed.start));
+      if (!previous || previous.kind === 'text') {
+        levelWidths = [];
+      }
+      while (levelWidths.length > 0 && levelWidths[levelWidths.length - 1] > width) {
+        levelWidths.pop();
+      }
+      if (levelWidths.length === 0 || levelWidths[levelWidths.length - 1] < width) {
+        levelWidths.push(width);
+      }
+      const block = createBlock(parsed.kind, parsed.text, parsed.start);
+      block.indent = Math.min(levelWidths.length - 1, MAX_INDENT);
+      blocks.push(block);
       return;
     }
-    const previous = blocks[blocks.length - 1];
-    const isIndented = withoutIndent.length < line.length;
-    if (isIndented && previous && previous.kind !== 'text') {
+
+    if (whitespace.length > 0 && previous && previous.kind !== 'text') {
       previous.text = `${previous.text}\n${withoutIndent}`;
       return;
     }
+    levelWidths = [];
     blocks.push(createBlock('text', line));
   });
 
@@ -188,7 +281,13 @@ export const pasteIntoBlocks = (
     return { blocks: next, focus: { id: block.id, caret: change.caret } };
   }
 
-  const pastedBlocks = parseText(trimmed);
+  // Pasted list items are nested relative to the list item the cursor is in.
+  const baseIndent = indentOf(block);
+  const pastedBlocks = parseText(trimmed).map((pastedBlock) =>
+    pastedBlock.kind === 'text'
+      ? pastedBlock
+      : { ...pastedBlock, indent: Math.min(MAX_INDENT, indentOf(pastedBlock) + baseIndent) }
+  );
   const parsedFirst = pastedBlocks[0];
 
   // The first pasted line continues the current line.
