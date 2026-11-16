@@ -1,0 +1,59 @@
+.flashcard-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  font-family: inherit;
+}
+
+.flashcard-notes__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.flashcard-notes__clear {
+  font-size: 12px;
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.flashcard-notes__input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+
+.flashcard-notes__input:focus {
+  border-color: rgba(59, 130, 246, 0.8);
+}
+
+/* The SDK toggles "dark" / "light" on <body> inside the sandboxed iframe. */
+body.light .flashcard-notes {
+  color: #1f2937;
+}
+
+body.dark .flashcard-notes {
+  color: #e5e7eb;
+}
+
+body.dark .flashcard-notes__input {
+  border-color: rgba(229, 231, 235, 0.3);
+}
+
+body.dark .flashcard-notes__input:focus {
+  border-color: rgba(96, 165, 250, 0.9);
+}
