@@ -528,10 +528,10 @@ export const FlashcardNotesWidget = () => {
       </div>
       <div className="fn-hint">
         <span>
-          <kbd>-</kbd> bullet list
+          <kbd>- Space</kbd> bullet list
         </span>
         <span>
-          <kbd>1.</kbd> numbered list
+          <kbd>1. Space</kbd> numbered list
         </span>
         <span>
           <kbd>⌥ Enter</kbd> line break

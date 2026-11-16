@@ -99,7 +99,8 @@ body.dark .fn-root {
 }
 
 .fn-marker--number {
-  min-width: 26px;
+  /* Wide enough for "99." so items keep the same indent up to two digits. */
+  min-width: 34px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
