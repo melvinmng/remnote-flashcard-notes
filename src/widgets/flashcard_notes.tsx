@@ -168,6 +168,20 @@ export const FlashcardNotesWidget = () => {
   }, [cardKey, plugin]);
 
   /** Render blocks, move the caret and mirror the notes into session storage. */
+  /**
+   * Move the caret to another line without changing the notes. Done directly on the
+   * DOM: re-setting unchanged state would not re-render, so a pending focus would never
+   * be applied.
+   */
+  const focusLine = (id: string, caret: number) => {
+    const textArea = textAreaRefs.current.get(id);
+    if (!textArea) {
+      return;
+    }
+    textArea.focus();
+    textArea.setSelectionRange(caret, caret);
+  };
+
   const applyBlocks = useCallback(
     (nextBlocks: Block[], focus?: PendingFocus | null) => {
       if (focus) {
@@ -478,7 +492,7 @@ export const FlashcardNotesWidget = () => {
         event.key === 'ArrowUp' ? 'last' : 'first',
         caretX
       );
-      commitBlocks(blocks, { id: target.id, caret: targetCaret });
+      focusLine(target.id, targetCaret);
     }
   };
 
@@ -556,8 +570,7 @@ export const FlashcardNotesWidget = () => {
           if (event.target === event.currentTarget) {
             event.preventDefault();
             const last = blocks[blocks.length - 1];
-            pendingFocus.current = { id: last.id, caret: last.text.length };
-            setBlocks(blocks.slice());
+            focusLine(last.id, last.text.length);
           }
         }}
       >
