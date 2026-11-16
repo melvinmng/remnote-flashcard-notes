@@ -263,6 +263,47 @@ export const applyTextChange = (block: Block, value: string, caret: number) => {
 };
 
 /**
+ * A list prefix typed at the start of a line break inside a plain line (Shift+Enter or
+ * Option+Enter) splits the line there: the text before the break stays a plain line,
+ * the broken line becomes a list item and any lines after it stay plain text.
+ * Returns null when the change is not such a prefix (handled by applyTextChange then).
+ * Line breaks inside list items are left alone, they are part of the item.
+ */
+export const splitAtListTrigger = (
+  block: Block,
+  value: string,
+  caret: number
+): { blocks: Block[]; focus: PendingFocus } | null => {
+  if (block.kind !== 'text') {
+    return null;
+  }
+  const lineStart = value.lastIndexOf('\n', caret - 1) + 1;
+  if (lineStart === 0) {
+    return null;
+  }
+  const lineEnd = value.indexOf('\n', lineStart);
+  const line = value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+  const parsed = applyListTrigger(line);
+  if (parsed.kind === 'text') {
+    return null;
+  }
+  // Only a prefix that was just typed: the caret sits right behind it and the
+  // previous text did not already carry it at this position.
+  const prefixLength = line.length - parsed.text.length;
+  const previousLine = block.text.slice(lineStart).split('\n')[0];
+  if (caret !== lineStart + prefixLength || applyListTrigger(previousLine).kind === parsed.kind) {
+    return null;
+  }
+
+  const listItem = createBlock(parsed.kind, parsed.text, parsed.start);
+  const blocks: Block[] = [{ ...block, text: value.slice(0, lineStart - 1) }, listItem];
+  if (lineEnd !== -1) {
+    blocks.push(createBlock('text', value.slice(lineEnd + 1)));
+  }
+  return { blocks, focus: { id: listItem.id, caret: 0 } };
+};
+
+/**
  * Paste plain text into line `index` replacing the selection [selectionStart, selectionEnd).
  * Returns null when the native paste can be used (single line without trailing break).
  */

@@ -22,6 +22,7 @@ import {
   type PendingFocus,
   serializeBlocks,
   shiftIndent,
+  splitAtListTrigger,
 } from '../notes_model';
 import {
   closestOffsetOnLine,
@@ -302,6 +303,15 @@ export const FlashcardNotesWidget = () => {
 
     // A "- " or "1. " typed at the start of a line switches its type (a separate undo step);
     // other typing is grouped per line so one undo step removes a burst of characters.
+    // A prefix typed after Shift+Enter or Option+Enter in a plain line starts a list item there.
+    const split = splitAtListTrigger(block, value, caret);
+    if (split) {
+      const next = blocks.slice();
+      next.splice(index, 1, ...split.blocks);
+      commitBlocks(next, split.focus);
+      return;
+    }
+
     const change = applyTextChange(block, value, caret);
     if (change.isListTrigger) {
       replaceBlock(index, change.block, { id: block.id, caret: change.caret });

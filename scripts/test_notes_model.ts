@@ -13,6 +13,7 @@ import {
   pasteIntoBlocks,
   serializeBlocks,
   shiftIndent,
+  splitAtListTrigger,
 } from '../src/notes_model';
 import { closestOffsetOnLine, isOnFirstLine, isOnLastLine } from '../src/caret_geometry';
 
@@ -250,6 +251,45 @@ test('a prefix that was already in the text does not convert on the next keystro
 
 test('a prefix typed in the middle of a list item stays literal', () => {
   assert.equal(applyTextChange(item('bullet', 'a'), 'a1. ', 4).isListTrigger, false);
+});
+
+test('"- " typed after a line break in plain text starts a bullet below it', () => {
+  // Shift+Enter or Option+Enter inserts a break inside the line instead of a new line.
+  const plain = createBlock('text', 'Test\n-');
+  const split = splitAtListTrigger(plain, 'Test\n- ', 7);
+  assert.ok(split);
+  assert.deepEqual(shape(split.blocks), [
+    { kind: 'text', text: 'Test' },
+    { kind: 'bullet', text: '' },
+  ]);
+  assert.equal(split.blocks[0].id, plain.id);
+  assert.deepEqual(split.focus, { id: split.blocks[1].id, caret: 0 });
+});
+
+test('"1. " typed after a line break keeps the text before and after in plain lines', () => {
+  const plain = createBlock('text', 'a\nb\nc');
+  // Caret at the start of "b", then "1. " typed.
+  const split = splitAtListTrigger(plain, 'a\n1. b\nc', 5);
+  assert.ok(split);
+  assert.deepEqual(shape(split.blocks), [
+    { kind: 'text', text: 'a' },
+    { kind: 'number', text: 'b', start: 1 },
+    { kind: 'text', text: 'c' },
+  ]);
+  assert.deepEqual(split.focus, { id: split.blocks[1].id, caret: 0 });
+});
+
+test('a list prefix that was already after a line break is not split again', () => {
+  const plain = createBlock('text', 'Test\n- dhd');
+  assert.equal(splitAtListTrigger(plain, 'Test\n- dhdx', 11), null);
+});
+
+test('a line break inside a list item does not split it', () => {
+  assert.equal(splitAtListTrigger(item('bullet', 'a\n-'), 'a\n- ', 4), null);
+});
+
+test('a prefix on the first line is left to applyTextChange', () => {
+  assert.equal(splitAtListTrigger(createBlock('text', '-'), '- ', 2), null);
 });
 
 test('counter counts top-level items only', () => {
