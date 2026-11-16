@@ -218,3 +218,14 @@ body.dark .fn-root {
 .fn-root--all-selected .fn-input::selection {
   background: transparent;
 }
+
+/* Touch devices: keyboard hints do not apply and there is no hover, so show the clear button. */
+@media (hover: none) and (pointer: coarse) {
+  .fn-hint {
+    visibility: hidden;
+  }
+
+  .fn-clear {
+    opacity: 1;
+  }
+}

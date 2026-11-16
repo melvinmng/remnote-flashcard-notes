@@ -25,6 +25,13 @@ The field starts as plain text. Lists start with Markdown-style prefixes at the 
 
 Wrapped lines and line breaks stay indented behind the bullet or number.
 
+### Mobile
+
+The plugin is enabled on mobile. Lists (`- ` / `1. `), `Enter` for the next item, the counter and
+the clear button work with the touch keyboard. Keyboard shortcuts that need a hardware keyboard
+(`Option` + `Enter`, `Cmd` + `A`, `Esc`, undo shortcuts) are desktop-only, and the shortcut hints
+are hidden on touch devices.
+
 Pasting multi-line text splits it into separate lines. Lines starting with `- ` or `1. ` become
 list items, so lists copied from elsewhere keep their structure.
 
@@ -130,7 +137,7 @@ to repeat steps 1–4.
    manifest must point to this public repository.
 
 `"unlisted": true` in `public/manifest.json` keeps the plugin off the public marketplace. It can be
-installed from `https://www.remnote.com/plugins/flashcard-notes`. Remove the flag to list it publicly.
+installed from `https://www.remnote.com/plugins/melvinmng-flashcard-notes`. Remove the flag to list it publicly.
 
 ## Project structure
 

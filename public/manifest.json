@@ -1,16 +1,16 @@
 {
   "manifestVersion": 1,
-  "id": "flashcard-notes",
+  "id": "melvinmng-flashcard-notes",
   "name": "Flashcard Notes",
   "author": "melvinmng",
   "repoUrl": "https://github.com/melvinmng/remnote-flashcard-notes",
   "version": {
     "major": 0,
-    "minor": 5,
+    "minor": 6,
     "patch": 0
   },
   "theme": [],
-  "enableOnMobile": false,
+  "enableOnMobile": true,
   "unlisted": true,
   "description": "Adds a notes field with bullet and numbered lists below each flashcard in the queue to write down what you remember before revealing the answer.",
   "requestNative": false,
