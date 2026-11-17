@@ -134,14 +134,12 @@ export const shiftIndent = (blocks: Block[], index: number, delta: 1 | -1): Bloc
 };
 
 /**
- * Number of filled top-level list items (bullets and numbered items), matching
- * RemNote's "Recall N bullets" hint, which counts the direct children of a card.
- * Nested items and empty items are ignored; an item with line breaks counts once.
+ * Number of filled list items (bullets and numbered items) on every nesting level,
+ * matching RemNote's "Recall N bullets" hint, which counts nested children as well.
+ * Plain lines and empty items are ignored; an item with line breaks counts once.
  */
 export const countListItems = (blocks: Block[]): number =>
-  blocks.filter(
-    (block) => block.kind !== 'text' && indentOf(block) === 0 && block.text.trim().length > 0
-  ).length;
+  blocks.filter((block) => block.kind !== 'text' && block.text.trim().length > 0).length;
 
 /** Turn the start of a plain line into a list item if it carries a list prefix. */
 export const applyListTrigger = (text: string): Omit<Block, 'id'> => {

@@ -81,9 +81,9 @@ selection. `Cmd`/`Ctrl` + `C`/`X` copies or cuts a selection across lines as Mar
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
 A small counter below the field shows how many list items you have written (for example
-`3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. It counts filled
-top-level bullets and numbered items, like RemNote's hint counts the direct children of a card.
-Nested items, plain lines and empty items are not counted.
+`3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. Like RemNote's hint,
+it counts filled bullets and numbered items on every nesting level. Plain lines and empty items
+are not counted.
 
 The clear button (×) in the top-right corner of the field empties the field. The field is also
 cleared automatically when the next card loads, and the notes of a card are discarded once you

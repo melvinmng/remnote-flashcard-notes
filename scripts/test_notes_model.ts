@@ -297,9 +297,15 @@ test('a prefix on the first line is left to applyTextChange', () => {
   assert.equal(splitAtListTrigger(createBlock('text', '-'), '- ', 2), null);
 });
 
-test('counter counts top-level items only', () => {
-  const blocks = [item('bullet', 'a'), item('bullet', 'a.1', 1), item('number', 'b', 0, 1)];
-  assert.equal(countListItems(blocks), 2);
+test('counter counts nested items like RemNote', () => {
+  const blocks = [
+    item('bullet', 'a'),
+    item('bullet', 'a.1', 1),
+    item('bullet', 'a.1.1', 2),
+    item('number', 'b', 0, 1),
+    item('bullet', '', 1),
+  ];
+  assert.equal(countListItems(blocks), 4);
 });
 
 test('lines around the pasted block are left untouched', () => {
