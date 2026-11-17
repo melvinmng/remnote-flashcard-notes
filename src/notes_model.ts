@@ -366,3 +366,183 @@ export const pasteIntoBlocks = (
   next.splice(index, 1, ...combined);
   return { blocks: next, focus: { id: lastBlock.id, caret } };
 };
+
+/**
+ * Restore the nesting invariant after lines were merged or a marker was removed:
+ * a list item is at most one level deeper than the list item directly above it, and a
+ * list item after a plain line starts at level 0. Unchanged blocks keep their identity.
+ */
+export const normalizeIndents = (blocks: Block[]): Block[] => {
+  let changed = false;
+  const next = blocks.slice();
+  for (let index = 0; index < next.length; index += 1) {
+    const block = next[index];
+    if (block.kind === 'text') {
+      continue;
+    }
+    const previous = next[index - 1];
+    const maxIndent = previous && previous.kind !== 'text' ? indentOf(previous) + 1 : 0;
+    if (indentOf(block) > maxIndent) {
+      next[index] = { ...block, indent: maxIndent };
+      changed = true;
+    }
+  }
+  return changed ? next : blocks;
+};
+
+/** Position in the notes: line index and character offset inside that line's text. */
+export interface BlockPoint {
+  index: number;
+  offset: number;
+}
+
+/** Negative when `a` comes before `b`, zero when both are the same position. */
+export const comparePoints = (a: BlockPoint, b: BlockPoint): number =>
+  a.index - b.index || a.offset - b.offset;
+
+/**
+ * Delete the text between `start` and `end` (start <= end), possibly across lines.
+ * The first line keeps its type and id and takes over the rest of the last line;
+ * the lines in between are removed. Deleting everything leaves one empty plain line.
+ */
+export const deleteRange = (blocks: Block[], start: BlockPoint, end: BlockPoint): EditResult => {
+  const first = blocks[start.index];
+  const last = blocks[end.index];
+  const coversAll =
+    comparePoints(start, end) < 0 &&
+    start.index === 0 &&
+    start.offset === 0 &&
+    end.index === blocks.length - 1 &&
+    end.offset === last.text.length;
+  if (coversAll) {
+    return { blocks: [{ id: first.id, kind: 'text', text: '' }], focus: { id: first.id, caret: 0 } };
+  }
+  const merged: Block = {
+    ...first,
+    text: first.text.slice(0, start.offset) + last.text.slice(end.offset),
+  };
+  const next = blocks.slice();
+  next.splice(start.index, end.index - start.index + 1, merged);
+  return { blocks: normalizeIndents(next), focus: { id: first.id, caret: start.offset } };
+};
+
+/**
+ * Lines covered by a selection, with the first and last line cut to the selection.
+ * Line types and nesting levels are kept; numbered items keep their visible number.
+ */
+export const sliceBlocks = (blocks: Block[], start: BlockPoint, end: BlockPoint): Block[] => {
+  const numbers = computeNumbers(blocks);
+  const slice: Block[] = [];
+  for (let index = start.index; index <= end.index; index += 1) {
+    const block = blocks[index];
+    const from = index === start.index ? start.offset : 0;
+    const to = index === end.index ? end.offset : block.text.length;
+    const part: Block = { ...block, text: block.text.slice(from, to) };
+    const number = numbers[index];
+    if (block.kind === 'number' && number !== null) {
+      part.start = number;
+    }
+    slice.push(part);
+  }
+  return slice;
+};
+
+/**
+ * Plain text of a selection for the clipboard. A selection inside one line is copied
+ * as it is; a selection across lines keeps list markers and nesting (see serializeBlocks).
+ */
+export const selectionText = (blocks: Block[], start: BlockPoint, end: BlockPoint): string => {
+  if (start.index === end.index) {
+    return blocks[start.index].text.slice(start.offset, end.offset);
+  }
+  return serializeBlocks(sliceBlocks(blocks, start, end));
+};
+
+/**
+ * Indent or outdent every list item in the lines `from`..`to`. Items nested under a
+ * selected item move with it and are not shifted a second time. Returns null when
+ * nothing changes.
+ */
+export const shiftIndentRange = (
+  blocks: Block[],
+  from: number,
+  to: number,
+  delta: 1 | -1
+): Block[] | null => {
+  let next = blocks;
+  // Original nesting level of the last selected item that was shifted with its children.
+  let rootIndent: number | null = null;
+  for (let index = from; index <= to; index += 1) {
+    const block = blocks[index];
+    if (block.kind === 'text') {
+      rootIndent = null;
+      continue;
+    }
+    if (rootIndent !== null && indentOf(block) > rootIndent) {
+      continue;
+    }
+    const shifted = shiftIndent(next, index, delta);
+    // An item that cannot move leaves its children to be shifted on their own.
+    rootIndent = shifted ? indentOf(block) : null;
+    if (shifted) {
+      next = shifted;
+    }
+  }
+  return next === blocks ? null : next;
+};
+
+export interface LineEditResult {
+  blocks: Block[];
+  /** Caret to set when the edit changed the structure; null for plain typing. */
+  focus: PendingFocus | null;
+  /** Plain typing that can be merged into one undo step. */
+  typing: boolean;
+}
+
+/**
+ * Apply a new text typed into line `index` with the caret at `caret`. A list prefix
+ * typed at the start of the line switches its type, a prefix typed after a line break
+ * in a plain line splits it (see applyTextChange and splitAtListTrigger).
+ */
+export const editLineText = (
+  blocks: Block[],
+  index: number,
+  value: string,
+  caret: number
+): LineEditResult => {
+  const block = blocks[index];
+  const next = blocks.slice();
+  const split = splitAtListTrigger(block, value, caret);
+  if (split) {
+    next.splice(index, 1, ...split.blocks);
+    return { blocks: next, focus: split.focus, typing: false };
+  }
+  const change = applyTextChange(block, value, caret);
+  next[index] = change.block;
+  if (change.isListTrigger) {
+    return { blocks: next, focus: { id: block.id, caret: change.caret }, typing: false };
+  }
+  return { blocks: next, focus: null, typing: true };
+};
+
+/**
+ * Insert plain text (paste) into line `index`, replacing [selectionStart, selectionEnd).
+ * Multi-line text is split into lines like pasteIntoBlocks does.
+ */
+export const insertPlainText = (
+  blocks: Block[],
+  index: number,
+  selectionStart: number,
+  selectionEnd: number,
+  text: string
+): EditResult => {
+  const pasted = pasteIntoBlocks(blocks, index, selectionStart, selectionEnd, text);
+  if (pasted) {
+    return pasted;
+  }
+  const block = blocks[index];
+  const caret = selectionStart + text.length;
+  const value = block.text.slice(0, selectionStart) + text + block.text.slice(selectionEnd);
+  const edit = editLineText(blocks, index, value, caret);
+  return { blocks: edit.blocks, focus: edit.focus ?? { id: block.id, caret } };
+};
