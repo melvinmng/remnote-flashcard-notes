@@ -171,8 +171,9 @@ to repeat steps 1–4.
 
 1. Update the version in `public/manifest.json` (and `package.json`).
 2. Run `npm run build`. This validates the plugin and creates `PluginZip.zip` in the project root.
-3. In RemNote open **Settings → Plugins → Build** and click **Upload plugin**. Select `PluginZip.zip`.
-4. A RemNote team member reviews the code before the plugin is approved. The `repoUrl` in the
+3. Commit `PluginZip.zip` with the release changes and attach a copy to the GitHub release.
+4. In RemNote open **Settings → Plugins → Build** and click **Upload plugin**. Select the same ZIP.
+5. A RemNote team member reviews the code before the plugin is approved. The `repoUrl` in the
    manifest must point to this public repository.
 
 Since version 0.8.0, release manifests omit `unlisted` so RemNote can list Flashcard Notes publicly
