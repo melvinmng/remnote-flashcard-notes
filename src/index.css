@@ -46,7 +46,7 @@ body.dark .fn-root {
 .fn-field {
   position: relative;
   box-sizing: border-box;
-  padding: 10px 40px 10px 14px;
+  padding: 0;
   border: 1px solid var(--fn-border);
   border-radius: 10px;
   background: var(--fn-surface);
@@ -67,64 +67,81 @@ body.dark .fn-root {
   background: var(--fn-surface);
 }
 
-.fn-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fn-line {
-  display: flex;
-  align-items: flex-start;
-}
-
-/* Fixed-width marker column keeps wrapped lines aligned behind the marker. */
-.fn-marker {
-  flex: 0 0 auto;
+/* The single editable element; its children are the lines (see src/editor_dom.ts). */
+.fn-editor {
   box-sizing: border-box;
-  min-width: 26px;
-  padding-right: 8px;
+  margin: 0;
+  padding: 10px 40px 10px 14px;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  caret-color: var(--fn-text);
+}
+
+.fn-editor::selection,
+.fn-editor ::selection {
+  background: var(--fn-selection);
+}
+
+/*
+ * One line. List items get a fixed marker column (hanging indent) so wrapped lines and
+ * line breaks stay aligned behind the marker. --fn-indent is the nesting offset.
+ */
+.fn-line {
+  position: relative;
+  min-height: 24px;
+  padding-left: var(--fn-indent, 0px);
   line-height: 24px;
+}
+
+.fn-line--bullet {
+  padding-left: calc(var(--fn-indent, 0px) + 26px);
+}
+
+/* Wide enough for "99." so items keep the same indent up to two digits. */
+.fn-line--number {
+  padding-left: calc(var(--fn-indent, 0px) + 34px);
+}
+
+/* Markers are pseudo-elements: not editable, not selectable, not copied. */
+.fn-line--bullet::before,
+.fn-line--number::before {
+  position: absolute;
+  top: 0;
+  left: var(--fn-indent, 0px);
   color: var(--fn-dot);
+  pointer-events: none;
+  user-select: none;
 }
 
 /* Dot is vertically centered on the first text line: (24px - 6px) / 2 = 9px. */
-.fn-dot {
-  display: block;
+.fn-line--bullet::before {
+  content: '';
+  top: 9px;
+  left: calc(var(--fn-indent, 0px) + 8px);
   width: 6px;
   height: 6px;
-  margin: 9px 0 0 8px;
   border-radius: 50%;
   background: var(--fn-dot);
 }
 
-.fn-marker--number {
-  /* Wide enough for "99." so items keep the same indent up to two digits. */
-  min-width: 34px;
+.fn-line--number::before {
+  content: attr(data-number);
+  box-sizing: border-box;
+  width: 34px;
+  padding-right: 8px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.fn-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: 24px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.fn-input::placeholder {
+.fn-line--placeholder::after {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 0;
+  left: var(--fn-indent, 0px);
   color: var(--fn-muted);
+  pointer-events: none;
+  user-select: none;
 }
 
 .fn-clear {
@@ -200,25 +217,6 @@ body.dark .fn-root {
   font-size: 11px;
 }
 
-/* Field-level "select all" (Cmd/Ctrl+A) highlights every line, markers included. */
-.fn-root--all-selected .fn-line {
-  background: var(--fn-selection);
-}
-
-.fn-root--all-selected .fn-line:first-child {
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-}
-
-.fn-root--all-selected .fn-line:last-child {
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
-}
-
-.fn-root--all-selected .fn-input::selection {
-  background: transparent;
-}
-
 /* Touch devices: keyboard hints do not apply and there is no hover, so show the clear button. */
 @media (hover: none) and (pointer: coarse) {
   .fn-hint {
@@ -231,12 +229,12 @@ body.dark .fn-root {
 }
 
 /* Nested bullets: filled dot, hollow circle, small square (repeating). */
-.fn-dot--level-1 {
+.fn-line--level-1::before {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--fn-dot);
 }
 
-.fn-dot--level-2 {
+.fn-line--level-2::before {
   border-radius: 1px;
 }
 

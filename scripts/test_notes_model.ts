@@ -9,13 +9,18 @@ import {
   computeNumbers,
   countListItems,
   createBlock,
+  deleteRange,
+  editLineText,
+  insertPlainText,
+  normalizeIndents,
   parseText,
   pasteIntoBlocks,
+  selectionText,
   serializeBlocks,
   shiftIndent,
+  shiftIndentRange,
   splitAtListTrigger,
 } from '../src/notes_model';
-import { closestOffsetOnLine, isOnFirstLine, isOnLastLine } from '../src/caret_geometry';
 
 /** Build a list item at a nesting level. */
 const item = (kind: 'bullet' | 'number', text: string, indent = 0, start?: number): Block => ({
@@ -292,24 +297,15 @@ test('a prefix on the first line is left to applyTextChange', () => {
   assert.equal(splitAtListTrigger(createBlock('text', '-'), '- ', 2), null);
 });
 
-test('counter counts top-level items only', () => {
-  const blocks = [item('bullet', 'a'), item('bullet', 'a.1', 1), item('number', 'b', 0, 1)];
-  assert.equal(countListItems(blocks), 2);
-});
-
-test('caret geometry finds the first/last visual line and the closest column', () => {
-  // Two visual lines: offsets 0-3 on top 0, offsets 4-7 on top 24.
-  const positions = [0, 10, 20, 30, 0, 10, 20, 30].map((left, offset) => ({
-    top: offset < 4 ? 0 : 24,
-    left,
-  }));
-  assert.equal(isOnFirstLine(positions, 2), true);
-  assert.equal(isOnFirstLine(positions, 5), false);
-  assert.equal(isOnLastLine(positions, 7), true);
-  assert.equal(isOnLastLine(positions, 1), false);
-  assert.equal(closestOffsetOnLine(positions, 'last', 18), 6);
-  assert.equal(closestOffsetOnLine(positions, 'first', 100), 3);
-  assert.equal(closestOffsetOnLine([], 'first', 5), 0);
+test('counter counts nested items like RemNote', () => {
+  const blocks = [
+    item('bullet', 'a'),
+    item('bullet', 'a.1', 1),
+    item('bullet', 'a.1.1', 2),
+    item('number', 'b', 0, 1),
+    item('bullet', '', 1),
+  ];
+  assert.equal(countListItems(blocks), 4);
 });
 
 test('lines around the pasted block are left untouched', () => {
@@ -351,6 +347,97 @@ test('counter is zero for plain text only', () => {
   assert.equal(countListItems([createBlock('text', '- not a list yet')]), 0);
 });
 
+test('deleting across lines joins the first and last line and keeps the first type', () => {
+  const blocks = [item('bullet', 'alpha'), createBlock('text', 'beta'), item('number', 'gamma', 0, 1)];
+  const result = deleteRange(blocks, { index: 0, offset: 2 }, { index: 2, offset: 3 });
+  assert.deepEqual(shape(result.blocks), [{ kind: 'bullet', text: 'alma' }]);
+  assert.equal(result.blocks[0].id, blocks[0].id);
+  assert.deepEqual(result.focus, { id: blocks[0].id, caret: 2 });
+});
+
+test('deleting the whole field leaves one empty plain line', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'b')];
+  const result = deleteRange(blocks, { index: 0, offset: 0 }, { index: 1, offset: 1 });
+  assert.deepEqual(shape(result.blocks), [{ kind: 'text', text: '' }]);
+});
+
+test('deleting from the end of a line to the start of the next merges them', () => {
+  const blocks = [createBlock('text', 'ab'), item('bullet', 'cd')];
+  const result = deleteRange(blocks, { index: 0, offset: 2 }, { index: 1, offset: 0 });
+  assert.deepEqual(shape(result.blocks), [{ kind: 'text', text: 'abcd' }]);
+  assert.deepEqual(result.focus, { id: blocks[0].id, caret: 2 });
+});
+
+test('a selection inside one line is copied without the list marker', () => {
+  const blocks = [item('bullet', 'hello world')];
+  assert.equal(selectionText(blocks, { index: 0, offset: 6 }, { index: 0, offset: 11 }), 'world');
+});
+
+test('a selection across lines is copied with markers, nesting and numbers', () => {
+  const blocks = [
+    item('number', 'one', 0, 1),
+    item('number', 'two', 0),
+    item('bullet', 'nested', 1),
+    createBlock('text', 'plain tail'),
+  ];
+  const text = selectionText(blocks, { index: 1, offset: 1 }, { index: 3, offset: 5 });
+  assert.equal(text, '2. wo\n    - nested\nplain');
+  assert.deepEqual(computeNumbers(parseText(text)), [2, null, null]);
+});
+
+test('Tab on a selection indents every item but moves children only once', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'b'), item('bullet', 'b.1', 1), item('bullet', 'c')];
+  const result = shiftIndentRange(blocks, 1, 3, 1);
+  assert.ok(result);
+  assert.deepEqual(
+    result.map((block) => block.indent ?? 0),
+    [0, 1, 2, 1]
+  );
+});
+
+test('Shift+Tab on a selection outdents every item', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'b', 1), item('bullet', 'c', 1)];
+  const result = shiftIndentRange(blocks, 0, 2, -1);
+  assert.ok(result);
+  assert.deepEqual(
+    result.map((block) => block.indent ?? 0),
+    [0, 0, 0]
+  );
+  assert.equal(shiftIndentRange([createBlock('text', 'x')], 0, 0, 1), null);
+});
+
+test('typing a list prefix through editLineText switches the line type', () => {
+  const blocks = [createBlock('text', '')];
+  const result = editLineText(blocks, 0, '- ', 2);
+  assert.deepEqual(shape(result.blocks), [{ kind: 'bullet', text: '' }]);
+  assert.deepEqual(result.focus, { id: blocks[0].id, caret: 0 });
+  assert.equal(result.typing, false);
+  const typed = editLineText(blocks, 0, 'x', 1);
+  assert.equal(typed.focus, null);
+  assert.equal(typed.typing, true);
+});
+
+test('pasting a single line inserts it at the caret and places the caret after it', () => {
+  const blocks = [createBlock('text', 'ad')];
+  const result = insertPlainText(blocks, 0, 1, 1, 'bc');
+  assert.deepEqual(shape(result.blocks), [{ kind: 'text', text: 'abcd' }]);
+  assert.deepEqual(result.focus, { id: blocks[0].id, caret: 3 });
+});
+
+test('merging a plain line with a bullet keeps the nested items valid', () => {
+  const blocks = [createBlock('text', 'plain'), item('bullet', 'p'), item('bullet', 'c', 1), item('bullet', 'gc', 2)];
+  const result = deleteRange(blocks, { index: 0, offset: 5 }, { index: 1, offset: 0 });
+  assert.deepEqual(shape(result.blocks), [
+    { kind: 'text', text: 'plainp' },
+    { kind: 'bullet', text: 'c' },
+    { kind: 'bullet', text: 'gc', indent: 1 },
+  ]);
+});
+
+test('normalizeIndents leaves valid nesting untouched', () => {
+  const blocks = [item('bullet', 'a'), item('bullet', 'b', 1), item('number', 'c', 2)];
+  assert.equal(normalizeIndents(blocks), blocks);
+});
 let failures = 0;
 for (const [name, run] of cases) {
   try {

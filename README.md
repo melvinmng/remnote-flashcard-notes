@@ -55,31 +55,40 @@ are hidden on touch devices.
 Pasting multi-line text splits it into separate lines. Lines starting with `- ` or `1. ` become
 list items, so lists copied from elsewhere keep their structure.
 
+### Selecting text
+
+The field is one text area for all lines: select across several lines with the mouse,
+`Shift` + arrow keys or `Cmd` + `A` / `Ctrl` + `A`. Typing, `Backspace` or pasting replaces the
+selection. `Cmd`/`Ctrl` + `C`/`X` copies or cuts a selection across lines as Markdown-style text
+(`- ` and `1. ` markers, nesting as indentation); a selection inside one line is copied as plain text.
+
 ### Keyboard shortcuts
 
 | Key | Action |
 |---|---|
 | `Enter` | New line; inside a list it starts the next item (splits at the cursor) |
-| `Tab` / `Shift` + `Tab` in a list item | Indent / outdent the item together with its nested items |
+| `Tab` / `Shift` + `Tab` in a list item | Indent / outdent the item together with its nested items; with several lines selected, every selected item moves |
 | `Enter` on an empty nested item | Move it one level up |
 | `Enter` on an empty top-level item | End the list and continue with plain text |
-| `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) | Line break inside the current line or item |
+| `Option` + `Enter` (`Alt` + `Enter` on Windows/Linux) or `Shift` + `Enter` | Line break inside the current line or item |
 | `Backspace` at the start of a nested item | Move it one level up |
 | `Backspace` at the start of a top-level item | Remove the bullet or number, keep the text |
 | `Backspace` at the start of a plain line | Merge it into the line above |
-| `↑` / `↓` on the first / last visual line | Move to the previous / next item, keeping the cursor column; inside a wrapped item the cursor moves line by line |
-| `Cmd` + `A` / `Ctrl` + `A` | Select the whole field (all lines). Then `Backspace` clears it, typing replaces it, `Cmd`/`Ctrl` + `C`/`X` copies or cuts it as Markdown-style text |
+| `Delete` at the end of a line | Merge the next line into it |
+| `Cmd` + `A` / `Ctrl` + `A` | Select the whole field (all lines) |
 | `Cmd` + `Z` / `Ctrl` + `Z` | Undo across all lines (typing bursts are undone together) |
 | `Cmd` + `Shift` + `Z` / `Ctrl` + `Shift` + `Z` / `Ctrl` + `Y` | Redo |
 | `Esc` | Leave the field so the queue shortcuts (`Space`, `1`–`4`) work again |
 
 A small counter below the field shows how many list items you have written (for example
-`3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. It counts filled
-top-level bullets and numbered items, like RemNote's hint counts the direct children of a card.
-Nested items, plain lines and empty items are not counted.
+`3 bullets`), so you can compare it with RemNote's "Recall 3 bullets" hint. Like RemNote's hint,
+it counts filled bullets and numbered items on every nesting level. Plain lines and empty items
+are not counted.
 
 The clear button (×) in the top-right corner of the field empties the field. The field is also
-cleared automatically when the next card loads.
+cleared automatically when the next card loads, and the notes of a card are discarded once you
+rate it or leave the queue, so a card that comes back later (for example after "Forgot") starts
+with an empty field.
 
 ### Settings
 
@@ -101,7 +110,8 @@ Open RemNote **Settings → Plugins → Flashcard Notes**.
 - `requestNative` is `false`: the plugin runs in RemNote's sandboxed iframe.
 - No network requests.
 - Notes live only in memory and in RemNote's plugin session storage (so they survive a re-render of
-  the widget when the answer is revealed). The stored copy is cleared when the next card loads.
+  the widget when the answer is revealed). The stored copy is cleared when a card is rated, when
+  the next card loads and when the queue is entered or left.
 
 ## Local development
 
@@ -165,14 +175,14 @@ to repeat steps 1–4.
 4. A RemNote team member reviews the code before the plugin is approved. The `repoUrl` in the
    manifest must point to this public repository.
 
-`"unlisted": true` in `public/manifest.json` keeps the plugin off the public marketplace. It can be
-installed from `https://www.remnote.com/plugins/melvinmng-flashcard-notes`. Remove the flag to list it publicly.
+Since version 0.8.0, release manifests omit `unlisted` so RemNote can list Flashcard Notes publicly
+after approving the upload. [Flashcard Notes on RemNote](https://www.remnote.com/plugins/melvinmng-flashcard-notes)
 
 ## Project structure
 
 ```text
 public/
-  manifest.json          Plugin metadata (id, version, permissions, unlisted flag)
+  manifest.json          Plugin metadata (id, version, permissions)
   logo.svg               Plugin icon
 src/
   widgets/
