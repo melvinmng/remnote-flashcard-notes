@@ -175,14 +175,14 @@ to repeat steps 1–4.
 4. A RemNote team member reviews the code before the plugin is approved. The `repoUrl` in the
    manifest must point to this public repository.
 
-`"unlisted": true` in `public/manifest.json` keeps the plugin off the public marketplace. It can be
-installed from `https://www.remnote.com/plugins/melvinmng-flashcard-notes`. Remove the flag to list it publicly.
+Since version 0.8.0, release manifests omit `unlisted` so RemNote can list Flashcard Notes publicly
+after approving the upload. [Flashcard Notes on RemNote](https://www.remnote.com/plugins/melvinmng-flashcard-notes)
 
 ## Project structure
 
 ```text
 public/
-  manifest.json          Plugin metadata (id, version, permissions, unlisted flag)
+  manifest.json          Plugin metadata (id, version, permissions)
   logo.svg               Plugin icon
 src/
   widgets/
